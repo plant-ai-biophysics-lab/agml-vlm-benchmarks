@@ -46,31 +46,6 @@ pip install agml pillow pyyaml scikit-learn pandas tqdm
 pip install ultralytics  # for YOLO models
 ```
 
-### 2. Directory Structure
-
-```
-vlm-investigation/
-├── configs.yaml              # Model configurations
-├── splits.yaml               # Train/val fold definitions
-├── datasets.txt              # List of datasets for batch processing
-├── fine_tune_classification.py
-├── zero_shot_classification.py
-├── farm_finetune.sh          # SLURM job for fine-tuning
-├── farm_zero.sh              # SLURM job for zero-shot
-├── scripts/
-│   ├── baseline.sh           # Local batch processing
-│   └── lora_finetune.sh      # Local fine-tuning script
-├── models/
-│   ├── siglip2.py
-│   ├── llava_next.py
-│   ├── qwen_vl.py
-│   └── yolo11.py
-├── tasks/
-│   └── classification.py    # Dataset loading utilities
-└── utils/
-    └── utils.py              # Metrics and evaluation
-```
-
 ---
 
 ## Quick Start
