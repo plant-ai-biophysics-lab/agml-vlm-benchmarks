@@ -30,11 +30,38 @@ def main(args):
         
         test(args.cfg, model_type="Qwen/Qwen2.5-VL-7B-Instruct", dataset=args.dataset, output_dir=output_dir)
         
+    elif args.model_type == "qwen_vl_72b":
+        
+        from models.qwen_vl import test
+        
+        test(args.cfg, model_type="Qwen/Qwen2.5-VL-72B-Instruct", dataset=args.dataset, output_dir=output_dir)
+        
     elif args.model_type == "gemma_3":
         
         from models.gemma_3 import test
         
         test(args.cfg, model_type="google/gemma-3-4b-it", dataset=args.dataset, output_dir=output_dir)
+        
+    elif args.model_type == "deepseek_vl":
+        
+        from models.deepseekvl_7b import test
+        
+        test(args.cfg, model_type="deepseek-ai/deepseek-vl-7b-chat", dataset=args.dataset, output_dir=output_dir)
+
+    elif args.model_type == "gpt-5-nano":
+        
+        from models.api_vlms import test_openai
+        
+        test_openai(args.cfg, model_type="gpt-5-nano", dataset=args.dataset, output_dir=output_dir)
+        
+    elif args.model_type == "gpt-5":
+        
+        from models.api_vlms import test_openai
+
+        test_openai(args.cfg, model_type="gpt-5", dataset=args.dataset, output_dir=output_dir)
+
+    else:
+        raise ValueError(f"Unknown model type: {args.model_type}")
 
 if __name__ == "__main__":
     

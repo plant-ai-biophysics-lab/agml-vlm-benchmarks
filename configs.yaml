@@ -113,6 +113,17 @@ qwen_vl:
     max_grad_norm: 0.3
     warmup_ratio: 0.03
 
+qwen_vl_72b:
+
+  dtype: bfloat16
+  attn_implementation: sdpa
+  batch_size: 1
+
+  # prompt template for classification (uses {classes} placeholder)
+  prompt_template: "What is shown in this image? Choose one: {classes}. Answer with only the class name."
+
+  sample_limit: 0.1  # or 1.0 for full dataset, or None
+
 gemma_3:
 
   dtype: bfloat16
@@ -142,3 +153,24 @@ gemma_3:
     bf16: True
     max_grad_norm: 0.3
     warmup_ratio: 0.03
+
+deepseek_vl:
+
+  dtype: bfloat16
+  batch_size: 1
+
+  # prompt template for classification (uses {classes} placeholder)
+  prompt_template: "<image_placeholder>What is shown in this image? Choose one: {classes}. Answer with only the class name."
+
+gpt-5-nano:
+
+  batch_size: 1
+  max_workers: 10  # Number of parallel API calls (set to 1 for sequential)
+  prompt_template: "Classify this image into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
+
+gpt-5:
+
+  sample_limit: 0.1  # or 1.0 for full dataset, or None
+  batch_size: 1
+  max_workers: 10  # Number of parallel API calls (set to 1 for sequential)
+  prompt_template: "Classify this image into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."

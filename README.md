@@ -19,11 +19,17 @@ This repository contains scripts for evaluating and fine-tuning Vision-Language 
 ## Overview
 
 **Supported Models:**
+
+*HuggingFace Models (Local):*
 - `siglip2` - Google SigLIP v2 (base-patch16-224)
 - `llava_next` - LLaVA-Next (llama3-8b)
 - `qwen_vl` - Qwen2.5-VL (7B-Instruct)
 - `yolo` - YOLO11 classification
 
+*API-Based Models:*
+- `gpt-5` - OpenAI GPT-5
+- `gpt-5-nano` - OpenAI GPT-5-nano
+  
 **Datasets:**
 - 28 agricultural classification datasets from AgML
 - Includes plant disease detection, weed classification, pest identification, etc.
@@ -35,6 +41,7 @@ This repository contains scripts for evaluating and fine-tuning Vision-Language 
 
 ### 1. Environment Setup
 
+**For HuggingFace Models:**
 ```bash
 # Create conda environment
 conda create -n vlm python=3.10
@@ -46,16 +53,60 @@ pip install agml pillow pyyaml scikit-learn pandas tqdm
 pip install ultralytics  # for YOLO models
 ```
 
+**For API-Based Models:**
+```bash
+# Or install individually:
+pip install openai>=1.0.0           # For OpenAI GPT-4o
+pip install google-generativeai>=0.3.0  # For Google Gemini
+pip install anthropic>=0.18.0       # For Anthropic Claude
+```
+
+### 2. API Keys Setup (For API Models Only)
+
+For API-based models, you need to set up API keys:
+
+**Option 1: Interactive Setup Script**
+```bash
+bash scripts/setup_api_keys.sh
+```
+
+**Option 2: Manual Setup**
+```bash
+# Add to ~/.bashrc or export in terminal
+export OPENAI_API_KEY='your-openai-key-here'
+export GOOGLE_API_KEY='your-google-key-here'
+export ANTHROPIC_API_KEY='your-anthropic-key-here'
+
+# Apply changes
+source ~/.bashrc
+```
+
+**Get API Keys:**
+- OpenAI: https://platform.openai.com/api-keys
+- Google Gemini: https://aistudio.google.com/app/apikey
+- Anthropic Claude: https://console.anthropic.com/settings/keys
+
 ---
 
 ## Quick Start
 
-### Single Dataset Zero-Shot Classification
+### HuggingFace Models (Zero-Shot)
 
 ```bash
 python zero_shot_classification.py \
     --dataset arabica_coffee_leaf_disease_classification \
     --model-type siglip2 \
+    --config configs.yaml \
+    --output-dir outputs/
+```
+
+### API Models (Zero-Shot)
+
+```bash
+# OpenAI GPT-4o-mini
+python zero_shot_classification.py \
+    --dataset arabica_coffee_leaf_disease_classification \
+    --model-type gpt-5 \
     --config configs.yaml \
     --output-dir outputs/
 ```
@@ -180,26 +231,6 @@ bash scripts/baseline.sh fine_tune siglip2
 ```
 
 The script reads dataset names from `datasets.txt` and processes them sequentially.
-
-#### SLURM Cluster (Parallel Jobs)
-
-**Submit zero-shot job:**
-```bash
-sbatch farm_zero.sh siglip2
-```
-
-**Submit fine-tuning job for single model:**
-```bash
-sbatch farm_finetune.sh siglip2 fold_1
-```
-
-**Submit fine-tuning job for multiple models:**
-```bash
-sbatch farm_finetune.sh "siglip2 llava_next qwen_vl" fold_1
-```
-
-This will train all three models sequentially in a single SLURM job.
-
 ---
 
 ## Configuration

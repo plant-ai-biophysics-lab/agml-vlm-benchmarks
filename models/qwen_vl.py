@@ -127,6 +127,11 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
         dataset_path = dataset
     df = agml_to_df(os.path.join(dataset_path, "val"))
     
+    # if sample limit is set, take a subset
+    sample_limit = args.get("sample_limit", None)  # Default to full dataset
+    if sample_limit and 0 < sample_limit < 1:
+        df = df.sample(frac=sample_limit, random_state=42).reset_index(drop=True)
+    
     # prepare data
     class_names = sorted(df["label"].unique().tolist())
     class_to_id = {c: i for i, c in enumerate(class_names)}

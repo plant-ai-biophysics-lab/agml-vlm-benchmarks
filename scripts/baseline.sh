@@ -9,6 +9,7 @@ echo "======================================"
 echo "Starting batch processing"
 echo "Mode: $MODE"
 echo "Model: $MODEL_TYPE"
+echo "Using Python: $(which python)"
 echo "======================================"
 echo ""
 
@@ -44,7 +45,7 @@ while IFS= read -r dataset || [ -n "$dataset" ]; do
     echo "======================================"
     
     # Run the appropriate script
-    if python3 "$SCRIPT" \
+    if python "$SCRIPT" \
         --dataset "$dataset" \
         --model-type "$MODEL_TYPE" \
         --config "$CONFIG_FILE" \
