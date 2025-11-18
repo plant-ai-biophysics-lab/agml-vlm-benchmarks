@@ -9,7 +9,7 @@ from trl import SFTConfig, SFTTrainer
 from peft import LoraConfig
 
 from tasks.classification import load_agml_dataset, agml_to_df
-from utils.utils import batched, save_classification_results
+from utils.utils import batched, save_classification_results, fuzzy_match_label
 
 def format_data(image, prompt, label):
     
@@ -143,6 +143,7 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
     
     # conversational format
     conversation_template = args["prompt_template"].format(classes=classes_str)
+    print("Conversation template:", conversation_template)
         
     model = Qwen2_5_VLForConditionalGeneration.from_pretrained(model_type, torch_dtype=args["dtype"], device_map="auto", attn_implementation=args["attn_implementation"])
     processor = AutoProcessor.from_pretrained(model_type)
@@ -154,10 +155,16 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
     paths = df["image_path"].tolist()
     preds_ids = []
     probs_rows = []
+    generated_texts = []
+    match_scores = []
     
     for batch in tqdm(list(batched(paths, args["batch_size"])), desc="Testing"):
-
-        for image in batch: # sequential processing due to conversational nature
+        
+        # prepare batch of conversations
+        conversations = []
+        image_inputs_list = []
+        
+        for image in batch:
             conversation = [
                 {
                     "role": "user",
@@ -170,36 +177,61 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
                     ],
                 },
             ]
-
-            prompt = processor.apply_chat_template(conversation, tokenize=False, add_generation_prompt=True)
-            image_inputs, _ = process_vision_info(conversation)
-            inputs = processor(images=image_inputs, text=[prompt], padding=True, return_tensors="pt").to(model.device)
-
-            with torch.no_grad():
-                outputs = model.generate(**inputs, max_new_tokens=50, do_sample=False)
-                outputs_trimmed = [
-                    out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, outputs)
-                ]
-                generated_text = processor.decode(outputs_trimmed[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)
-                
-            # parse the generated text to find the predicted class
-            predicted_class = None
-            generated_lower = generated_text.lower()
+            conversations.append(conversation)
             
-            for idx, label in enumerate(candidate_labels):
-                if label.lower() in generated_lower:
-                    predicted_class = idx
-                    break
+            # process vision info for this conversation
+            img_inputs, _ = process_vision_info(conversation)
+            image_inputs_list.extend(img_inputs)  # Extend, not append
+        
+        # apply chat template to all conversations in batch
+        prompts = [
+            processor.apply_chat_template(conv, tokenize=False, add_generation_prompt=True)
+            for conv in conversations
+        ]
+        
+        # process all images and texts together
+        inputs = processor(
+            images=image_inputs_list,
+            text=prompts,
+            padding=True,
+            return_tensors="pt"
+        ).to(model.device)
+
+        with torch.no_grad():
+            outputs = model.generate(**inputs, max_new_tokens=50, do_sample=False)
             
-            # if no match found, default to first class
+            # trim outputs for each item in batch
+            outputs_trimmed = [
+                out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, outputs)
+            ]
+            
+            # decode all outputs
+            batch_generated_texts = [
+                processor.decode(out, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+                for out in outputs_trimmed
+            ]
+        
+        # process each generated text in the batch
+        for generated_text in batch_generated_texts:
+            generated_texts.append(generated_text)
+            
+            # fuzzy matching to find the predicted class
+            predicted_class, match_score, matched_label = fuzzy_match_label(
+                generated_text, candidate_labels, threshold=0.6
+            )
+            
+            # if no match found, keep as None (for open-ended evaluation)
             if predicted_class is None:
-                predicted_class = 0
-            
+                match_score = 0.0
+                print(f"WARNING: No match found for: '{generated_text}'")
+
             preds_ids.append(predicted_class)
-            
-            # create one-hot encoded probabilities (generative models don't provide confidence scores)
+            match_scores.append(match_score)
+
+            # create one-hot encoded probabilities
             prob_row = [0.0] * len(candidate_labels)
-            prob_row[predicted_class] = 1.0
+            if predicted_class is not None:
+                prob_row[predicted_class] = 1.0
             probs_rows.append(prob_row)
         
     # save metrics
@@ -209,5 +241,7 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
         probs_rows,
         df,
         y_true,
-        output_dir
+        output_dir,
+        generated_texts=generated_texts,
+        match_scores=match_scores
     )

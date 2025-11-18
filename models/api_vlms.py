@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 
 from tasks.classification import load_agml_dataset, agml_to_df
-from utils.utils import save_classification_results
+from utils.utils import save_classification_results, fuzzy_match_label
 
 def encode_image_base64(image_path: str) -> str:
 
@@ -69,6 +69,8 @@ def test_openai(args: dict, model_type: str, dataset: str, output_dir: str):
     paths = df["image_path"].tolist()
     preds_ids = []
     probs_rows = []
+    generated_texts = []
+    match_scores = []
     total_input_tokens = 0
     total_output_tokens = 0
     
@@ -105,26 +107,21 @@ def test_openai(args: dict, model_type: str, dataset: str, output_dir: str):
         input_tokens = response.usage.input_tokens
         output_tokens = response.usage.output_tokens
         
-        # match to candidate labels (case-insensitive)
-        pred_id = -1
-        for i, label in enumerate(candidate_labels):
-            if label.lower() in prediction.lower():
-                pred_id = i
-                break
+        # Fuzzy matching to find the predicted class
+        predicted_class, match_score, matched_label = fuzzy_match_label(
+            prediction, candidate_labels, threshold=0.6
+        )
         
-        # if no match found, try exact match
-        if pred_id == -1 and prediction in candidate_labels:
-            pred_id = candidate_labels.index(prediction)
+        # If no match found, keep as None (for open-ended evaluation)
+        if predicted_class is None:
+            match_score = 0.0
         
-        # if still no match, default to first class
-        if pred_id == -1:
-            pred_id = 0
-        
-        # create uniform probability distribution
+        # create one-hot encoded probabilities
         probs = [0.0] * len(candidate_labels)
-        probs[pred_id] = 1.0
+        if predicted_class is not None:
+            probs[predicted_class] = 1.0
         
-        return pred_id, probs, input_tokens, output_tokens, prediction
+        return predicted_class, probs, input_tokens, output_tokens, prediction, match_score
     
     # Process images
     if use_parallel:
@@ -142,23 +139,29 @@ def test_openai(args: dict, model_type: str, dataset: str, output_dir: str):
             for future in tqdm(as_completed(future_to_idx), total=len(paths), desc="Testing"):
                 idx = future_to_idx[future]
                 try:
-                    pred_id, probs, input_tokens, output_tokens, prediction = future.result()
-                    results[idx] = (pred_id, probs)
+                    predicted_class, probs, input_tokens, output_tokens, prediction, match_score = future.result()
+                    results[idx] = (predicted_class, probs, prediction, match_score)
                     
                     # Thread-safe token counting
                     with token_lock:
                         total_input_tokens += input_tokens
                         total_output_tokens += output_tokens
                         
+                    # Print warning for non-matches
+                    if predicted_class is None:
+                        print(f"\nWARNING: No match found for: '{prediction}'")
+                        
                 except Exception as e:
                     print(f"\nWarning: Error processing image {idx}: {e}")
-                    # Default to first class on error
-                    results[idx] = (0, [1.0] + [0.0] * (len(candidate_labels) - 1))
+                    # Default to None on error
+                    results[idx] = (None, [0.0] * len(candidate_labels), "", 0.0)
             
             # Extract predictions in correct order
-            for pred_id, probs in results:
-                preds_ids.append(pred_id)
+            for predicted_class, probs, prediction, match_score in results:
+                preds_ids.append(predicted_class)
                 probs_rows.append(probs)
+                generated_texts.append(prediction)
+                match_scores.append(match_score)
     
     else:
         # Sequential processing (original implementation)
@@ -166,18 +169,26 @@ def test_openai(args: dict, model_type: str, dataset: str, output_dir: str):
         
         for image_path in tqdm(paths, desc="Testing"):
             try:
-                pred_id, probs, input_tokens, output_tokens, prediction = process_single_image(image_path)
+                predicted_class, probs, input_tokens, output_tokens, prediction, match_score = process_single_image(image_path)
                 
-                preds_ids.append(pred_id)
+                preds_ids.append(predicted_class)
                 probs_rows.append(probs)
+                generated_texts.append(prediction)
+                match_scores.append(match_score)
                 total_input_tokens += input_tokens
                 total_output_tokens += output_tokens
                 
+                # Print warning for non-matches
+                if predicted_class is None:
+                    print(f"\nWARNING: No match found for: '{prediction}'")
+                
             except Exception as e:
                 print(f"\nWarning: Error processing {image_path}: {e}")
-                # Default to first class on error
-                preds_ids.append(0)
-                probs_rows.append([1.0] + [0.0] * (len(candidate_labels) - 1))
+                # Default to None on error
+                preds_ids.append(None)
+                probs_rows.append([0.0] * len(candidate_labels))
+                generated_texts.append("")
+                match_scores.append(0.0)
             
     
     # calculate costs
@@ -214,5 +225,7 @@ def test_openai(args: dict, model_type: str, dataset: str, output_dir: str):
         probs_rows,
         df,
         y_true,
-        output_dir
+        output_dir,
+        generated_texts=generated_texts,
+        match_scores=match_scores
     )

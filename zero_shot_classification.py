@@ -6,11 +6,17 @@ from tasks.classification import is_dataset_avail
 
 def main(args):
     
-    output_dir = os.path.join(args.output_dir, "zero_shot_classification", args.model_type, args.dataset)
+    output_dir = os.path.join(args.output_dir, args.model_type, args.dataset)
     
     if not is_dataset_avail(args.dataset):
         
         raise ValueError(f"Dataset {args.dataset} is not available in AgML.")
+    
+    # Format prompt template with plant_type if provided
+    if hasattr(args, 'plant_type') and args.plant_type:
+        if 'prompt_template' in args.cfg and '{plant_type}' in args.cfg['prompt_template']:
+            args.cfg['prompt_template'] = args.cfg['prompt_template'].format(plant_type=args.plant_type)
+            print(f"Using prompt with plant type: {args.plant_type}")
     
     if args.model_type == "siglip2":
         
@@ -67,6 +73,7 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str, required=True, help="Name of dataset to pull from AgML.")
+    parser.add_argument("--plant-type", type=str, default=None, help="Plant type for open-ended prompts.")
     parser.add_argument("--model-type", type=str, default="yolo", help="Type of model to use.")
     parser.add_argument("--config", type=str, default="configs.yaml", help="Path to YAML configuration file.")
     parser.add_argument("--output-dir", type=str, default="outputs/", help="Directory to save outputs.")

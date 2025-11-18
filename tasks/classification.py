@@ -56,7 +56,7 @@ def is_dataset_avail(dataset: str):
     else:
         return False
 
-def load_agml_dataset(dataset: str | list[str], split_name: str = "combined"):
+def load_agml_dataset(dataset, split_name="combined"):
     """
     Load AgML dataset(s) and return the path to the split dataset.
     

@@ -8,7 +8,7 @@ from trl import SFTConfig, SFTTrainer
 from peft import LoraConfig
 
 from tasks.classification import load_agml_dataset, agml_to_df
-from utils.utils import batched, batch_images, save_classification_results
+from utils.utils import batched, batch_images, save_classification_results, fuzzy_match_label
 
 def format_data(image, prompt, label):
     
@@ -137,6 +137,7 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
     
     # LLaVa-Next uses conversational format
     conversation_template = args["prompt_template"].format(classes=classes_str)
+    print("Conversation template:", conversation_template)
 
     model = LlavaNextForConditionalGeneration.from_pretrained(model_type, torch_dtype=args["dtype"], device_map="auto", attn_implementation=args["attn_implementation"])
     processor = LlavaNextProcessor.from_pretrained(model_type)
@@ -148,12 +149,18 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
     paths = df["image_path"].tolist()
     preds_ids = []
     probs_rows = []
+    generated_texts = []
+    match_scores = []
     
     for batch in tqdm(list(batched(paths, args["batch_size"])), desc="Testing"):
         
         images = batch_images(batch)
-
-        for image in images: # sequential processing due to conversational nature
+        
+        # Prepare batch of conversations and prompts
+        conversations = []
+        prompts = []
+        
+        for image in images:
             conversation = [
                 {
                     "role": "user",
@@ -163,32 +170,45 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
                     ],
                 },
             ]
+            conversations.append(conversation)
             
+            # Apply chat template for each conversation
             prompt = processor.apply_chat_template(conversation, add_generation_prompt=True)
-            inputs = processor(images=image, text=prompt, return_tensors="pt").to(model.device)
+            prompts.append(prompt)
+        
+        # Process all images and prompts together
+        inputs = processor(images=images, text=prompts, padding=True, return_tensors="pt").to(model.device)
 
-            with torch.no_grad():
-                outputs = model.generate(**inputs, max_new_tokens=50, do_sample=False)
-                generated_text = processor.decode(outputs[0], skip_special_tokens=True)
+        with torch.no_grad():
+            outputs = model.generate(**inputs, max_new_tokens=50, do_sample=False)
             
-            # parse the generated text to find the predicted class
-            predicted_class = None
-            generated_lower = generated_text.lower()
+            # Decode all outputs in the batch
+            batch_generated_texts = [
+                processor.decode(output, skip_special_tokens=True) 
+                for output in outputs
+            ]
+        
+        # Process each generated text in the batch
+        for generated_text in batch_generated_texts:
+            generated_texts.append(generated_text)
             
-            for idx, label in enumerate(candidate_labels):
-                if label.lower() in generated_lower:
-                    predicted_class = idx
-                    break
-            
-            # if no match found, default to first class
+            # Fuzzy matching to find the predicted class
+            predicted_class, match_score, matched_label = fuzzy_match_label(
+                generated_text, candidate_labels, threshold=0.6
+            )
+
+            # If no match found, keep as None (for open-ended evaluation)
             if predicted_class is None:
-                predicted_class = 0
+                match_score = 0.0
+                print(f"WARNING: No match found for: '{generated_text}'")
             
             preds_ids.append(predicted_class)
+            match_scores.append(match_score)
             
-            # create one-hot encoded probabilities (generative models don't provide confidence scores)
+            # Create one-hot encoded probabilities
             prob_row = [0.0] * len(candidate_labels)
-            prob_row[predicted_class] = 1.0
+            if predicted_class is not None:
+                prob_row[predicted_class] = 1.0
             probs_rows.append(prob_row)
         
     # save metrics
@@ -198,5 +218,7 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
         probs_rows,
         df,
         y_true,
-        output_dir
+        output_dir,
+        generated_texts=generated_texts,
+        match_scores=match_scores
     )

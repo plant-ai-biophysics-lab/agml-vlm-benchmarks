@@ -7,8 +7,7 @@ from deepseek_vl.models import VLChatProcessor
 from deepseek_vl.utils.io import load_pil_images
 
 from tasks.classification import load_agml_dataset, agml_to_df
-from utils.utils import batched, save_classification_results
-
+from utils.utils import batched, batch_images, save_classification_results, fuzzy_match_label
 
 def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model: bool = False, trained_weights: str = None):
 
@@ -30,6 +29,7 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
     
     # LLaVa-Next uses conversational format
     conversation_template = args["prompt_template"].format(classes=classes_str)
+    print("Conversation template:", conversation_template)
 
     model = AutoModelForCausalLM.from_pretrained(model_type, torch_dtype=args["dtype"], device_map="auto")
     vl_chat_processor = VLChatProcessor.from_pretrained(model_type)
@@ -42,10 +42,10 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
     paths = df["image_path"].tolist()
     preds_ids = []
     probs_rows = []
+    generated_texts = []
+    match_scores = []
     
     for batch in tqdm(list(batched(paths, args["batch_size"])), desc="Testing"):
-        
-        # images = batch_images(batch)
 
         for image in batch: # sequential processing due to conversational nature
 
@@ -81,25 +81,26 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
                     use_cache=True
                 )
                 generated_text = tokenizer.decode(outputs[0].cpu().tolist(), skip_special_tokens=True)
-
-            # parse the generated text to find the predicted class
-            predicted_class = None
-            generated_lower = generated_text.lower()
+                
+            generated_texts.append(generated_text)
             
-            for idx, label in enumerate(candidate_labels):
-                if label.lower() in generated_lower:
-                    predicted_class = idx
-                    break
+            # fuzzy matching to find the predicted class
+            predicted_class, match_score, matched_label = fuzzy_match_label(
+                generated_text, candidate_labels, threshold=0.6
+            )
             
-            # if no match found, default to first class
+            # if no match found, keep as None (for open-ended evaluation)
             if predicted_class is None:
-                predicted_class = 0
-            
+                match_score = 0.0
+                print(f"WARNING: No match found for: '{generated_text}'")
+
             preds_ids.append(predicted_class)
+            match_scores.append(match_score)
             
             # create one-hot encoded probabilities (generative models don't provide confidence scores)
             prob_row = [0.0] * len(candidate_labels)
-            prob_row[predicted_class] = 1.0
+            if predicted_class is not None:
+                prob_row[predicted_class] = 1.0
             probs_rows.append(prob_row)
         
     # save metrics
@@ -109,5 +110,7 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
         probs_rows,
         df,
         y_true,
-        output_dir
+        output_dir,
+        generated_texts=generated_texts,
+        match_scores=match_scores
     )
