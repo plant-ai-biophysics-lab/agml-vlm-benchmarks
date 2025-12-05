@@ -35,8 +35,18 @@ set_api_key() {
 # Setup OpenAI
 set_api_key "OpenAI" "OPENAI_API_KEY"
 
-# Setup Google
-set_api_key "Google (Gemini)" "GOOGLE_API_KEY"
+# Setup Google/Gemini
+# Check both GEMINI_API_KEY and GOOGLE_API_KEY (either works)
+gemini_key=$(printenv GEMINI_API_KEY)
+google_key=$(printenv GOOGLE_API_KEY)
+
+if [ -n "$gemini_key" ] || [ -n "$google_key" ]; then
+    echo "Setting up Google (Gemini) API Key..."
+    echo "✓ Gemini API key is already set"
+    echo ""
+else
+    set_api_key "Google (Gemini)" "GEMINI_API_KEY"
+fi
 
 # Setup Anthropic
 set_api_key "Anthropic (Claude)" "ANTHROPIC_API_KEY"
@@ -52,5 +62,5 @@ echo "Or restart your terminal."
 echo ""
 echo "To get API keys:"
 echo "  - OpenAI: https://platform.openai.com/api-keys"
-echo "  - Google: https://aistudio.google.com/app/apikey"
+echo "  - Google Gemini: https://ai.google.dev/gemini-api/docs/api-key"
 echo "  - Anthropic: https://console.anthropic.com/settings/keys"

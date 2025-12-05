@@ -9,21 +9,20 @@ blackgram_plant_leaf_disease_classification, blackgram
 chilli_leaf_classification, chilli
 coconut_tree_disease_classification, coconut
 corn_maize_leaf_disease, corn
-#crop_weeds_greece, crop
+crop_weeds_greece, crop
 cucumber_disease_classification, cucumber
 guava_disease_pakistan, guava
 java_plum_leaf_disease_classification, java plum
-leaf_counting_denmark, plant
 onion_leaf_classification, onion
 orange_leaf_disease_classification, orange
 paddy_disease_classification, paddy
 papaya_leaf_disease_classification, papaya
-#plant_seedlings_aarhus, plant
+plant_seedlings_aarhus, plant
 plant_village_classification, plant
-#rangeland_weeds_australia, rangeland
+rangeland_weeds_australia, rangeland
 rice_leaf_disease_classification, rice
 soybean_insect_classification, soybean
-#soybean_weed_uav_brazil, soybean
+soybean_weed_uav_brazil, soybean
 sugarcane_damage_usa, sugarcane
 sunflower_disease_classification, sunflower
 tea_leaf_disease_classification, tea

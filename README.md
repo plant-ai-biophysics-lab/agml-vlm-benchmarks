@@ -10,6 +10,7 @@ This repository contains scripts for evaluating and fine-tuning Vision-Language 
   - [Zero-Shot Classification](#zero-shot-classification)
   - [Fine-Tuning with LoRA](#fine-tuning-with-lora)
   - [Batch Processing](#batch-processing)
+  - [LLM Judge Evaluation](#llm-judge-evaluation) ✨ **NEW**
 - [Configuration](#configuration)
 - [Output Structure](#output-structure)
 - [Analysis](#analysis)
@@ -231,6 +232,65 @@ bash scripts/baseline.sh fine_tune siglip2
 ```
 
 The script reads dataset names from `datasets.txt` and processes them sequentially.
+
+---
+
+### LLM Judge Evaluation ✨ **NEW**
+
+Evaluate predictions using an LLM judge that performs semantic label matching, accounting for synonyms and different naming conventions.
+
+#### Why Use LLM Judge?
+
+Traditional exact string matching fails when predictions and ground truth use different terminology:
+- Ground truth: `"tomato_early_blight"`
+- Prediction: `"early blight disease"`
+- Exact match: ❌ (wrong)
+- LLM Judge: ✅ (semantically correct)
+
+#### Quick Start
+
+**Option 1: OpenAI API (Fast, Paid)**
+```bash
+python evaluate_with_judge.py outputs/qwen_vl/tomato_leaf_disease/predictions.csv
+```
+
+**Option 2: GPT-OSS-120B (Free, Local, Open-Source)**
+```bash
+python evaluate_with_judge.py outputs/qwen_vl/tomato_leaf_disease/predictions.csv \
+    --model openai/gpt-oss-120b \
+    --provider hf \
+    --device auto
+```
+
+#### Batch Evaluation
+```bash
+python evaluate_with_judge.py "outputs/qwen_vl/*/predictions.csv" \
+    --model openai/gpt-oss-120b \
+    --provider hf \
+    --threshold 1
+```
+
+#### Confidence Scores
+
+| Score | Meaning |
+|-------|---------|
+| 0 | Very unsure / different things |
+| 1 | Could possibly be the same |
+| 2 | Very confident / clearly the same |
+
+Set `--threshold 1` (recommended) or `--threshold 2` (stricter)
+
+#### Output Files
+- `predictions_with_judge.csv` - Original predictions + judge scores
+- `judge_metrics.json` - Summary metrics and accuracy gains
+- `judge_report.txt` - Human-readable report with examples
+
+#### Documentation
+- 📖 [Full LLM Judge Guide](docs/LLM_JUDGE.md)
+- 🚀 [GPT-OSS Quick Start](docs/GPT_OSS_QUICK_START.md)
+- 📋 [Quick Reference](docs/LLM_JUDGE_QUICK_REF.md)
+- 📓 [Jupyter Demo](experiments/llm_judge_demo.ipynb)
+
 ---
 
 ## Configuration
@@ -362,44 +422,5 @@ When combining multiple datasets for training, classes are prefixed with their d
 - `arabica_coffee-Cerscospora`
 
 This allows tracking which dataset each class belongs to for cross-dataset evaluation.
-
----
-
-## Tips and Best Practices
-
-1. **GPU Memory**: Adjust `batch_size` and `gradient_accumulation_steps` based on available GPU memory
-
-2. **Learning Rate**: Start with `1e-3` for LoRA fine-tuning, reduce if training is unstable
-
-3. **LoRA Rank**: Higher rank (`r`) = more parameters but better adaptation. Default `r=8` works well.
-
-4. **Validation Strategy**: 
-   - Single dataset: Use built-in 80/20 split
-   - Cross-dataset: Use `splits.yaml` to evaluate generalization across datasets
-
-5. **Prompt Engineering**: Modify `prompt_template` in `configs.yaml` for different zero-shot performance
-
-6. **Monitoring**: Check SLURM output files in `outputs/` for job logs and errors
-
----
-
-## Troubleshooting
-
-**CUDA Out of Memory:**
-- Reduce `per_device_train_batch_size`
-- Increase `gradient_accumulation_steps` (maintains effective batch size)
-- Use `fp16: True` in trainer config
-
-**Missing Datasets:**
-- Verify dataset name matches AgML exactly (check `datasets.txt`)
-- AgML will auto-download datasets on first use
-
-**Model Loading Warnings:**
-- "Some weights were not initialized" - Expected when adding classification head
-- "Missing adapter keys" - Check model type matches between training and testing
-
-**Dimension Mismatch Errors:**
-- Ensure validation set uses same class naming convention as training
-- Check `label2id` and `id2label` mappings are consistent
 
 ---

@@ -6,6 +6,12 @@ from tasks.classification import is_dataset_avail
 
 def main(args):
     
+    # Format prompt template with plant_type if provided
+    if hasattr(args, 'plant_type') and args.plant_type:
+        if 'prompt_template' in args.cfg and '{plant_type}' in args.cfg['prompt_template']:
+            args.cfg['prompt_template'] = args.cfg['prompt_template'].format(plant_type=args.plant_type)
+            print(f"Using prompt with plant type: {args.plant_type}")
+    
     # handle different dataset specifications
     if args.splits_file:
         
@@ -84,6 +90,7 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str, nargs='+', help="Name of dataset(s) to pull from AgML. Can specify multiple datasets.")
+    parser.add_argument("--plant-type", type=str, default=None, help="Plant type for open-ended prompts.")
     parser.add_argument("--splits-file", type=str, help="Path to YAML file with train/val splits (e.g., splits.yaml)")
     parser.add_argument("--fold", type=str, help="Fold name from splits file (e.g., fold_1)")
     parser.add_argument("--model-type", type=str, default="yolo", help="Type of model to use.")

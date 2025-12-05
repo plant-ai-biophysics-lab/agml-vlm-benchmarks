@@ -66,6 +66,22 @@ def main(args):
 
         test_openai(args.cfg, model_type="gpt-5", dataset=args.dataset, output_dir=output_dir)
 
+    elif args.model_type.startswith("gemini"):
+        
+        from models.api_vlms import test_gemini
+        
+        # Extract model name from model_type (e.g., "gemini_25_flash" -> "gemini-2.5-flash")
+        # or use a mapping from config
+        model_name_map = {
+            "gemini_25_flash": "gemini-2.5-flash",
+            "gemini_25_flash_lite": "gemini-2.5-flash",
+            "gemini_15_flash": "gemini-1.5-flash",
+            "gemini_15_pro": "gemini-1.5-pro",
+        }
+        gemini_model = model_name_map.get(args.model_type, "gemini-2.5-flash")
+        
+        test_gemini(args.cfg, model_type=gemini_model, dataset=args.dataset, output_dir=output_dir)
+
     else:
         raise ValueError(f"Unknown model type: {args.model_type}")
 
