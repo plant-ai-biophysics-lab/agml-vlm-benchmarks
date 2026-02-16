@@ -9,6 +9,7 @@ from peft import LoraConfig
 
 from tasks.classification import load_agml_dataset, agml_to_df
 from utils.utils import batched, batch_images, save_classification_results, fuzzy_match_label
+from utils.mcqa import get_mcqa_choices, load_all_dataset_classes
 
 def format_data(image, prompt, label):
     
@@ -135,8 +136,27 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
     candidate_labels = class_names
     classes_str = ", ".join(candidate_labels)
     
-    # LLaVa-Next uses conversational format
-    conversation_template = args["prompt_template"].format(classes=classes_str)
+    # Check if MCQA mode is enabled
+    mcqa_options = args.get("mcqa_options", None)
+    all_dataset_classes = None
+    answer_included_list = []
+    mcqa_correct_answers = []  # Track the correct answer for each sample
+    mcqa_choices_list = []  # Track the choices for each sample
+    
+    if mcqa_options:
+        print(f"\nMCQA Mode Enabled:")
+        print(f"  Options within dataset: {mcqa_options.get('options_within_dataset', True)}")
+        print(f"  Number of choices: {mcqa_options.get('mcqa_num_choices', 4)}")
+        
+        # Load all dataset classes if needed for cross-dataset sampling
+        if not mcqa_options.get('options_within_dataset', True):
+            all_dataset_classes = load_all_dataset_classes()
+            print(f"  Loaded {len(all_dataset_classes)} datasets for cross-dataset sampling")
+    
+    # LLaVa-Next uses conversational format (template will be formatted per-sample for MCQA)
+    conversation_template = args["prompt_template"]
+    if not mcqa_options:
+        conversation_template = conversation_template.format(classes=classes_str)
     print("Conversation template:", conversation_template)
 
     model = LlavaNextForConditionalGeneration.from_pretrained(model_type, torch_dtype=args["dtype"], device_map="auto", attn_implementation=args["attn_implementation"])
@@ -151,7 +171,10 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
     probs_rows = []
     generated_texts = []
     match_scores = []
+    chosen_options = []  # Track which option number (1, 2, 3, ...) was chosen
     
+    sample_index = 0
+    batch_start_index = 0
     for batch in tqdm(list(batched(paths, args["batch_size"])), desc="Testing"):
         
         images = batch_images(batch)
@@ -160,13 +183,35 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
         conversations = []
         prompts = []
         
-        for image in images:
+        for i, image in enumerate(images):
+            # Generate MCQA choices if enabled
+            if mcqa_options:
+                true_label = df.iloc[sample_index]["label"]
+                choices, correct_answer, answer_included, correct_answer_index = get_mcqa_choices(
+                    true_label=true_label,
+                    all_classes=candidate_labels,
+                    options_within_dataset=mcqa_options.get('options_within_dataset', True),
+                    mcqa_num_choices=mcqa_options.get('mcqa_num_choices', 4),
+                    all_dataset_classes=all_dataset_classes,
+                    current_dataset=dataset,
+                    answer_included_ratio=0.7,
+                    sample_index=sample_index,
+                    print_sample=(sample_index == 0)  # Print first sample only
+                )
+                answer_included_list.append(answer_included)
+                mcqa_correct_answers.append(correct_answer)
+                mcqa_choices_list.append(choices)
+                sample_choices_str = ", ".join(choices)
+                prompt_text = conversation_template.format(classes=sample_choices_str)
+            else:
+                prompt_text = conversation_template
+            
             conversation = [
                 {
                     "role": "user",
                     "content": [
                         {"type": "image"},
-                        {"type": "text", "text": conversation_template},
+                        {"type": "text", "text": prompt_text},
                     ],
                 },
             ]
@@ -175,6 +220,7 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
             # Apply chat template for each conversation
             prompt = processor.apply_chat_template(conversation, add_generation_prompt=True)
             prompts.append(prompt)
+            sample_index += 1
         
         # Process all images and prompts together
         inputs = processor(images=images, text=prompts, padding=True, return_tensors="pt").to(model.device)
@@ -189,18 +235,44 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
             ]
         
         # Process each generated text in the batch
-        for generated_text in batch_generated_texts:
+        for batch_idx, generated_text in enumerate(batch_generated_texts):
             generated_texts.append(generated_text)
             
-            # Fuzzy matching to find the predicted class
-            predicted_class, match_score, matched_label = fuzzy_match_label(
-                generated_text, candidate_labels, threshold=0.6
-            )
-
-            # If no match found, keep as None (for open-ended evaluation)
-            if predicted_class is None:
-                match_score = 0.0
-                print(f"WARNING: No match found for: '{generated_text}'")
+            # For MCQA, match against the choices for this sample
+            if mcqa_options:
+                current_sample_idx = batch_start_index + batch_idx
+                sample_choices = mcqa_choices_list[current_sample_idx]
+                
+                # fuzzy matching to find the predicted class from the MCQA choices
+                predicted_class, match_score, matched_label = fuzzy_match_label(
+                    generated_text, sample_choices, threshold=0.6
+                )
+                
+                # Track which option was chosen (1-indexed)
+                if predicted_class is not None:
+                    chosen_options.append(predicted_class + 1)  # Convert to 1-indexed
+                    # Map the choice back to the original candidate_labels for storing pred_id
+                    matched_choice = sample_choices[predicted_class]
+                    if matched_choice in candidate_labels:
+                        predicted_class = candidate_labels.index(matched_choice)
+                    else:
+                        # It's "None of the above" or not in original labels
+                        predicted_class = None
+                else:
+                    chosen_options.append(None)
+                    match_score = 0.0
+                    print(f"WARNING: No match found for: '{generated_text}'")
+            else:
+                # Standard fuzzy matching to find the predicted class
+                predicted_class, match_score, matched_label = fuzzy_match_label(
+                    generated_text, candidate_labels, threshold=0.6
+                )
+                chosen_options.append(None)  # Not applicable for non-MCQA
+                
+                # if no match found, keep as None (for open-ended evaluation)
+                if predicted_class is None:
+                    match_score = 0.0
+                    print(f"WARNING: No match found for: '{generated_text}'")
             
             preds_ids.append(predicted_class)
             match_scores.append(match_score)
@@ -211,14 +283,39 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
                 prob_row[predicted_class] = 1.0
             probs_rows.append(prob_row)
         
+        batch_start_index = sample_index
+        
     # save metrics
+    extra_cols = {}
+    if mcqa_options:
+        if answer_included_list:
+            extra_cols['answer_included'] = answer_included_list
+        if mcqa_correct_answers:
+            extra_cols['mcqa_correct_answer'] = mcqa_correct_answers
+        if chosen_options:
+            extra_cols['chosen_option'] = chosen_options
+    
+    # For MCQA, we need to adjust y_true to reflect the correct answer
+    # (which may be "None of the above" when answer is not included)
+    y_true_adjusted = y_true.copy() if not mcqa_options else None
+    if mcqa_options:
+        y_true_adjusted = []
+        for i, correct_ans in enumerate(mcqa_correct_answers):
+            if correct_ans in candidate_labels:
+                y_true_adjusted.append(candidate_labels.index(correct_ans))
+            else:
+                # "None of the above" - use a special marker (-1 will be handled in save_classification_results)
+                y_true_adjusted.append(None)
+        y_true_adjusted = [y if y is not None else -1 for y in y_true_adjusted]
+    
     save_classification_results(
         candidate_labels,
         preds_ids,
         probs_rows,
         df,
-        y_true,
+        y_true_adjusted,
         output_dir,
         generated_texts=generated_texts,
-        match_scores=match_scores
+        match_scores=match_scores,
+        **extra_cols
     )

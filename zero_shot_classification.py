@@ -12,11 +12,30 @@ def main(args):
         
         raise ValueError(f"Dataset {args.dataset} is not available in AgML.")
     
-    # Format prompt template with plant_type if provided
-    if hasattr(args, 'plant_type') and args.plant_type:
-        if 'prompt_template' in args.cfg and '{plant_type}' in args.cfg['prompt_template']:
-            args.cfg['prompt_template'] = args.cfg['prompt_template'].format(plant_type=args.plant_type)
-            print(f"Using prompt with plant type: {args.plant_type}")
+    # Format prompt template with plant_type and task if provided
+    if 'prompt_template' in args.cfg:
+        template = args.cfg['prompt_template']
+        format_dict = {}
+        
+        if hasattr(args, 'plant_type') and args.plant_type:
+            format_dict['plant_type'] = args.plant_type
+            
+        if hasattr(args, 'task') and args.task:
+            format_dict['task'] = args.task
+        
+        # Only format if we have placeholders to fill
+        if format_dict:
+            # Use SafeFormatDict to handle missing placeholders gracefully
+            class SafeFormatDict(dict):
+                def __missing__(self, key):
+                    return '{' + key + '}'
+            
+            args.cfg['prompt_template'] = template.format_map(SafeFormatDict(**format_dict))
+            
+            if 'plant_type' in format_dict:
+                print(f"Using prompt with plant type: {format_dict['plant_type']}")
+            if 'task' in format_dict:
+                print(f"Using prompt with task: {format_dict['task']}")
     
     if args.model_type == "siglip2":
         
@@ -73,14 +92,26 @@ def main(args):
         # Extract model name from model_type (e.g., "gemini_25_flash" -> "gemini-2.5-flash")
         # or use a mapping from config
         model_name_map = {
+            "gemini-3-pro-preview": "gemini-3-pro-preview",
             "gemini_25_flash": "gemini-2.5-flash",
-            "gemini_25_flash_lite": "gemini-2.5-flash",
-            "gemini_15_flash": "gemini-1.5-flash",
-            "gemini_15_pro": "gemini-1.5-pro",
         }
         gemini_model = model_name_map.get(args.model_type, "gemini-2.5-flash")
         
         test_gemini(args.cfg, model_type=gemini_model, dataset=args.dataset, output_dir=output_dir)
+
+    elif args.model_type.startswith("claude"):
+        
+        from models.api_vlms import test_claude
+        
+        # Map config names to Claude API model names
+        model_name_map = {
+            "claude-sonnet-4-5": "claude-sonnet-4-5-20250929",
+            "claude-haiku-4-5": "claude-haiku-4-5-20251001",
+            "claude-opus-4-5": "claude-opus-4-5-20251101",
+        }
+        claude_model = model_name_map.get(args.model_type, "claude-haiku-4-5-20251001")
+        
+        test_claude(args.cfg, model_type=claude_model, dataset=args.dataset, output_dir=output_dir)
 
     else:
         raise ValueError(f"Unknown model type: {args.model_type}")
@@ -90,6 +121,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str, required=True, help="Name of dataset to pull from AgML.")
     parser.add_argument("--plant-type", type=str, default=None, help="Plant type for open-ended prompts.")
+    parser.add_argument("--task", type=str, default=None, help="Task type (e.g., 'disease', 'pest/damage', 'crops/weeds') for prompt templates.")
     parser.add_argument("--model-type", type=str, default="yolo", help="Type of model to use.")
     parser.add_argument("--config", type=str, default="configs.yaml", help="Path to YAML configuration file.")
     parser.add_argument("--output-dir", type=str, default="outputs/", help="Directory to save outputs.")

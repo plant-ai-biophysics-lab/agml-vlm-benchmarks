@@ -2,8 +2,8 @@
 MODE="${1:-zero_shot}"
 MODEL_TYPE="${2:-gemma_3}"
 CONFIG_FILE="../configs.yaml"
-OUTPUT_DIR="/group/jmearlesgrp/intermediate_data/eranario/vlm-investigation/zero_shot_classification/oeq_1"
-DATASET_FILE="../datasets2.txt"
+OUTPUT_DIR="outputs"
+DATASET_FILE="../datasets.txt"
 
 echo "======================================"
 echo "Starting batch processing"
@@ -36,9 +36,10 @@ while IFS= read -r line || [ -n "$line" ]; do
     # Skip empty lines and comments
     [[ -z "$line" || "$line" =~ ^#.* ]] && continue
     
-    # Parse dataset name and plant type (format: "dataset_name, plant_type")
+    # Parse dataset name, plant type, and task (format: "dataset_name, plant_type, task")
     dataset=$(echo "$line" | cut -d',' -f1 | xargs)
     plant_type=$(echo "$line" | cut -d',' -f2 | xargs)
+    task=$(echo "$line" | cut -d',' -f3 | xargs)
     
     # Skip if no dataset name
     [[ -z "$dataset" ]] && continue
@@ -49,14 +50,15 @@ while IFS= read -r line || [ -n "$line" ]; do
     echo "======================================"
     echo "[$current/$total_datasets] Processing: $dataset"
     echo "Plant type: $plant_type"
+    echo "Task: $task"
     echo "Started at: $(date)"
     echo "======================================"
     
     # Run the appropriate script
-    # if python3 "$SCRIPT" \
-    if python "$SCRIPT" \
+    if python3 "$SCRIPT" \
         --dataset "$dataset" \
         --plant-type "$plant_type" \
+        --task "$task" \
         --model-type "$MODEL_TYPE" \
         --config "$CONFIG_FILE" \
         --output-dir "$OUTPUT_DIR"; then

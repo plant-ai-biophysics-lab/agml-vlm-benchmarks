@@ -22,7 +22,6 @@ yolo:
   batch: 32
 
 siglip2:
-
   dtype: float16
   attn_implementation: sdpa
   batch_size: 12
@@ -37,7 +36,7 @@ siglip2:
     lora_dropout: 0.1
     bias: "none"
     target_modules: ["q_proj", "v_proj"]
-    modules_to_save: []  # Empty to keep zero-shot capability (don't train classifier)
+    modules_to_save: [] # Empty to keep zero-shot capability (don't train classifier)
 
   # Trainer configuration
   trainer_config:
@@ -52,15 +51,19 @@ siglip2:
     label_names: ["labels"]
 
 llava_next:
-
   dtype: bfloat16
   attn_implementation: sdpa
   batch_size: 8
-  
+
   # prompt template for classification (uses {classes} placeholder)
-  prompt_template: "What is shown in this image? Choose one: {classes}. Answer with only the class name."
+  # prompt_template: "What is shown in this image? Choose one: {classes}. Answer with only the class name."
   # prompt_template: "Respond in one sentence: What disease, pest, damage type, or other stress, if any, is exhibited in this image of a {plant_type} plant?"
   # prompt_template: "Respond in one sentence: What plant or weed species, if any, is shown in this image?"
+  prompt_template: "Classify this image into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
+
+  mcqa_options:
+    options_within_dataset: True
+    mcqa_num_choices: 5 # if options_within_dataset is False, number of random choices to sample
 
   lora_config:
     r: 8
@@ -84,15 +87,21 @@ llava_next:
     warmup_ratio: 0.03
 
 qwen_vl:
-
   dtype: bfloat16
   attn_implementation: sdpa
   batch_size: 8
 
   # prompt template for classification (uses {classes} placeholder)
-  prompt_template: "What is shown in this image? Choose one: {classes}. Answer with only the class name."
+  # prompt_template: "What is shown in this image? Choose one: {classes}. Answer with only the class name."
   # prompt_template: "Respond in one sentence: What disease, pest, damage type, or other stress, if any, is exhibited in this image of a {plant_type} plant?"
   # prompt_template: "Respond in one sentence: What plant or weed species, if any, is shown in this image?"
+  # prompt_template: "Classify this image into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
+  prompt_template: "Classify this image of a {plant_type} plant into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
+  # prompt_template: "Respond in one sentence: You are an agricultural expert that is really good at identifying {task}. Given the image please define what {task}, if any, is exhibited in this image of a {plant_type} plant?"
+
+  mcqa_options:
+    options_within_dataset: True
+    mcqa_num_choices: 5 # if options_within_dataset is False, number of random choices to sample
 
   lora_config:
     r: 8
@@ -116,7 +125,6 @@ qwen_vl:
     warmup_ratio: 0.03
 
 gemma_3:
-
   dtype: bfloat16
   attn_implementation: sdpa
   batch_size: 8
@@ -148,7 +156,6 @@ gemma_3:
     warmup_ratio: 0.03
 
 deepseek_vl:
-
   dtype: bfloat16
   batch_size: 8
 
@@ -158,7 +165,6 @@ deepseek_vl:
   # prompt_template: "<image_placeholder>Respond in one sentence: What plant or weed species, if any, is shown in this image?"
 
 qwen_vl_72b:
-
   dtype: bfloat16
   attn_implementation: sdpa
   batch_size: 1
@@ -166,31 +172,53 @@ qwen_vl_72b:
   # prompt template for classification (uses {classes} placeholder)
   # prompt_template: "What is shown in this image? Choose one: {classes}. Answer with only the class name."
   # prompt_template: "Respond in one sentence: What disease, pest, damage type, or other stress, if any, is exhibited in this image of a {plant_type} plant?"
-  prompt_template: "Respond in one sentence: What plant or weed species, if any, is shown in this image?"
+  # prompt_template: "Respond in one sentence: What plant or weed species, if any, is shown in this image?"
+  # prompt_template: "Respond in one sentence: You are an agricultural expert that is really good at identifying {task}. Given the image please define what {task}, if any, is exhibited in this image of a {plant_type} plant?"
+  # prompt_template: "You are an agricultural expert that is really good at identifying {task} species. Given the image please define what species is shown in this image?"
+  # prompt_template: "Classify this image into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
+  prompt_template: "Classify this image of a {plant_type} plant into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
 
-  sample_limit: 0.1  # or 1.0 for full dataset, or None
+  mcqa_options:
+   options_within_dataset: True
+   mcqa_num_choices: 5 # if options_within_dataset is False, number of random choices to sample
+
+  sample_limit: 0.1 # or 1.0 for full dataset, or None
 
 gpt-5-nano:
-
   batch_size: 1
-  max_workers: 10  # Number of parallel API calls (set to 1 for sequential)
+  max_workers: 10 # Number of parallel API calls (set to 1 for sequential)
   # prompt_template: "Classify this image into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
   # prompt_template: "Respond in one sentence: What disease, pest, damage type, or other stress, if any, is exhibited in this image of a {plant_type} plant?"
   prompt_template: "Respond in one sentence: What plant or weed species, if any, is shown in this image?"
 
 gpt-5:
-
-  sample_limit: 0.1  # or 1.0 for full dataset, or None
+  sample_limit: 0.1 # or 1.0 for full dataset, or None
   batch_size: 1
-  max_workers: 10  # Number of parallel API calls (set to 1 for sequential)
+  max_workers: 10 # Number of parallel API calls (set to 1 for sequential)
   # prompt_template: "Classify this image into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
   # prompt_template: "Respond in one sentence: What disease, pest, damage type, or other stress, if any, is exhibited in this image of a {plant_type} plant?"
   prompt_template: "Respond in one sentence: What plant or weed species, if any, is shown in this image?"
 
-gemini_25_flash_lite:
-
+gemini-3-pro-preview:
   batch_size: 1
-  max_workers: 10  # Number of parallel API calls (set to 1 for sequential)
+  sample_limit: 0.1
+
+  # Batch API mode (50% cost savings, but asynchronous - jobs may take hours)
+  use_batch: False # Set to True to use Batch API instead of real-time API
+  batch_poll_interval: 60 # Seconds between status checks (default: 60)
+  batch_max_wait: 86400 # Max wait time in seconds (default: 24 hours)
+
+  max_workers: 10 # Number of parallel API calls (only for real-time mode, ignored in batch mode)
+
+  prompt_template: "Classify this image into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
+  # prompt_template: "Respond in one sentence: What disease, pest, damage type, or other stress, if any, is exhibited in this image of a {plant_type} plant?"
+  # prompt_template: "Respond in one sentence: What plant or weed species, if any, is shown in this image?"
+
+claude-haiku-4-5:
+  batch_size: 1
+  max_workers: 10 # Number of parallel API calls
+  sample_limit: 0.1
+
   prompt_template: "Classify this image into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
   # prompt_template: "Respond in one sentence: What disease, pest, damage type, or other stress, if any, is exhibited in this image of a {plant_type} plant?"
   # prompt_template: "Respond in one sentence: What plant or weed species, if any, is shown in this image?"

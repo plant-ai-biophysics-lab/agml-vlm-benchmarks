@@ -11,10 +11,12 @@ usage() {
     echo "Optional arguments:"
     echo "  --config FILE        Path to config file (default: configs.yaml)"
     echo "  --output-dir DIR     Output directory (default: /group/jmearlesgrp/intermediate_data/eranario/vlm-investigation)"
+    echo "  --plant-type TYPE    Plant type for prompt templates (e.g., 'coffee', 'bean')"
+    echo "  --task TASK          Task type for prompt templates (e.g., 'disease', 'pest/damage', 'crops/weeds')"
     echo ""
     echo "Examples:"
     echo "  $0 --dataset bean_disease_uganda --model gpt-5-nano"
-    echo "  $0 --dataset arabica_coffee_leaf_disease_classification --model gemini_25_flash_lite"
+    echo "  $0 --dataset arabica_coffee_leaf_disease_classification --model gemini_25_flash_lite --plant-type coffee --task disease"
     echo ""
     exit 1
 }
@@ -24,6 +26,8 @@ DATASET=""
 MODEL=""
 CONFIG="configs.yaml"
 OUTPUT_DIR="/group/jmearlesgrp/intermediate_data/eranario/vlm-investigation/zero_shot_classification/mcqa_1"
+PLANT_TYPE=""
+TASK=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -41,6 +45,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --output-dir)
             OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        --plant-type)
+            PLANT_TYPE="$2"
+            shift 2
+            ;;
+        --task)
+            TASK="$2"
             shift 2
             ;;
         -h|--help)
@@ -69,6 +81,12 @@ echo "  Dataset:    $DATASET"
 echo "  Model:      $MODEL"
 echo "  Config:     $CONFIG"
 echo "  Output:     $OUTPUT_DIR"
+if [ -n "$PLANT_TYPE" ]; then
+    echo "  Plant Type: $PLANT_TYPE"
+fi
+if [ -n "$TASK" ]; then
+    echo "  Task:       $TASK"
+fi
 echo ""
 
 # Check API keys based on model type
@@ -107,11 +125,18 @@ echo ""
 echo "Running zero-shot classification..."
 echo ""
 
-python3 zero_shot_classification.py \
-    --dataset "$DATASET" \
-    --model-type "$MODEL" \
-    --config "$CONFIG" \
-    --output-dir "$OUTPUT_DIR"
+# Build command with optional parameters
+CMD="python zero_shot_classification.py --dataset \"$DATASET\" --model-type \"$MODEL\" --config \"$CONFIG\" --output-dir \"$OUTPUT_DIR\""
+
+if [ -n "$PLANT_TYPE" ]; then
+    CMD="$CMD --plant-type \"$PLANT_TYPE\""
+fi
+
+if [ -n "$TASK" ]; then
+    CMD="$CMD --task \"$TASK\""
+fi
+
+eval $CMD
 
 EXIT_CODE=$?
 

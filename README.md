@@ -3,17 +3,27 @@
 This repository contains scripts for evaluating and fine-tuning Vision-Language Models (VLMs) on agricultural image classification tasks using the AgML dataset library.
 
 ## Table of Contents
-- [Overview](#overview)
-- [Setup](#setup)
-- [Quick Start](#quick-start)
-- [Usage](#usage)
-  - [Zero-Shot Classification](#zero-shot-classification)
-  - [Fine-Tuning with LoRA](#fine-tuning-with-lora)
-  - [Batch Processing](#batch-processing)
-  - [LLM Judge Evaluation](#llm-judge-evaluation) ✨ **NEW**
-- [Configuration](#configuration)
-- [Output Structure](#output-structure)
-- [Analysis](#analysis)
+- [VLM Investigation: Agricultural Image Classification](#vlm-investigation-agricultural-image-classification)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [Setup](#setup)
+    - [1. Environment Setup](#1-environment-setup)
+    - [2. API Keys Setup (For API Models Only)](#2-api-keys-setup-for-api-models-only)
+  - [Quick Start](#quick-start)
+    - [HuggingFace Models (Zero-Shot)](#huggingface-models-zero-shot)
+    - [API Models (Zero-Shot)](#api-models-zero-shot)
+  - [Usage](#usage)
+    - [Zero-Shot Classification](#zero-shot-classification)
+    - [Batch Processing](#batch-processing)
+      - [Local (Sequential Processing)](#local-sequential-processing)
+    - [LLM Judge Evaluation](#llm-judge-evaluation)
+      - [Why Use LLM Judge?](#why-use-llm-judge)
+      - [Quick Start](#quick-start-1)
+      - [Batch Evaluation](#batch-evaluation)
+      - [Confidence Scores](#confidence-scores)
+      - [Output Files](#output-files)
+  - [Output Structure](#output-structure)
+    - [Output Files](#output-files-1)
 
 ---
 
@@ -24,12 +34,16 @@ This repository contains scripts for evaluating and fine-tuning Vision-Language 
 *HuggingFace Models (Local):*
 - `siglip2` - Google SigLIP v2 (base-patch16-224)
 - `llava_next` - LLaVA-Next (llama3-8b)
-- `qwen_vl` - Qwen2.5-VL (7B-Instruct)
+- `qwen_vl` - Qwen2.5-VL (7B-Instruct or 72B-Instruct)
+- `gemma_3` - Gemma 3 (4B-it)
+- `deepseek_vl` - Deepseek VL 7B Chat
 - `yolo` - YOLO11 classification
 
 *API-Based Models:*
 - `gpt-5` - OpenAI GPT-5
 - `gpt-5-nano` - OpenAI GPT-5-nano
+- `gemini-3-pro` - Gemini 3 Pro
+- `claude-haiku-4-5` - Claude Haiku 4.5
   
 **Datasets:**
 - 28 agricultural classification datasets from AgML
@@ -112,27 +126,6 @@ python zero_shot_classification.py \
     --output-dir outputs/
 ```
 
-### Single Dataset Fine-Tuning
-
-```bash
-python fine_tune_classification.py \
-    --dataset tomato_leaf_disease \
-    --model-type siglip2 \
-    --config configs.yaml \
-    --output-dir outputs/
-```
-
-### Fine-Tuning with Train/Val Splits
-
-```bash
-python fine_tune_classification.py \
-    --splits-file splits.yaml \
-    --fold fold_1 \
-    --model-type siglip2 \
-    --config configs.yaml \
-    --output-dir outputs/
-```
-
 ---
 
 ## Usage
@@ -166,55 +159,6 @@ python zero_shot_classification.py \
 
 ---
 
-### Fine-Tuning with LoRA
-
-Fine-tune models using LoRA (Low-Rank Adaptation) for efficient training:
-
-#### Option 1: Single Dataset (80/20 train/val split)
-
-```bash
-python fine_tune_classification.py \
-    --dataset tomato_leaf_disease \
-    --model-type siglip2 \
-    --config configs.yaml \
-    --output-dir outputs/
-```
-
-#### Option 2: Cross-Dataset Evaluation (using splits.yaml)
-
-```bash
-python fine_tune_classification.py \
-    --splits-file splits.yaml \
-    --fold fold_1 \
-    --model-type siglip2 \
-    --config configs.yaml \
-    --output-dir outputs/
-```
-
-**Arguments:**
-- `--dataset`: Single dataset name (for Option 1)
-- `--splits-file`: Path to YAML file with train/val splits (for Option 2)
-- `--fold`: Fold name from splits.yaml (e.g., `fold_1`, `fold_2`, `test_fold`)
-- `--model-type`: Model to fine-tune (currently supports `siglip2`)
-- `--config`: Path to YAML config file
-- `--output-dir`: Output directory for checkpoints and results
-
-**Splits File Format (`splits.yaml`):**
-```yaml
-fold_1:
-  train:
-    - arabica_coffee_leaf_disease_classification
-    - banana_leaf_disease_classification
-    - corn_maize_leaf_disease
-    # ... more training datasets
-  val:
-    - tomato_leaf_disease
-    - rice_leaf_disease_classification
-    # ... more validation datasets
-```
-
----
-
 ### Batch Processing
 
 #### Local (Sequential Processing)
@@ -226,16 +170,9 @@ Use `scripts/baseline.sh` for batch processing multiple datasets:
 bash scripts/baseline.sh zero_shot siglip2
 ```
 
-**Fine-tune on all datasets:**
-```bash
-bash scripts/baseline.sh fine_tune siglip2
-```
-
-The script reads dataset names from `datasets.txt` and processes them sequentially.
-
 ---
 
-### LLM Judge Evaluation ✨ **NEW**
+### LLM Judge Evaluation
 
 Evaluate predictions using an LLM judge that performs semantic label matching, accounting for synonyms and different naming conventions.
 
@@ -254,10 +191,10 @@ Traditional exact string matching fails when predictions and ground truth use di
 python evaluate_with_judge.py outputs/qwen_vl/tomato_leaf_disease/predictions.csv
 ```
 
-**Option 2: GPT-OSS-120B (Free, Local, Open-Source)**
+**Option 2: GPT-OSS-20B (Free, Local, Open-Source)**
 ```bash
 python evaluate_with_judge.py outputs/qwen_vl/tomato_leaf_disease/predictions.csv \
-    --model openai/gpt-oss-120b \
+    --model openai/gpt-oss-20b \
     --provider hf \
     --device auto
 ```
@@ -285,51 +222,6 @@ Set `--threshold 1` (recommended) or `--threshold 2` (stricter)
 - `judge_metrics.json` - Summary metrics and accuracy gains
 - `judge_report.txt` - Human-readable report with examples
 
-#### Documentation
-- 📖 [Full LLM Judge Guide](docs/LLM_JUDGE.md)
-- 🚀 [GPT-OSS Quick Start](docs/GPT_OSS_QUICK_START.md)
-- 📋 [Quick Reference](docs/LLM_JUDGE_QUICK_REF.md)
-- 📓 [Jupyter Demo](experiments/llm_judge_demo.ipynb)
-
----
-
-## Configuration
-
-### Model Configurations (`configs.yaml`)
-
-Each model has its own configuration section:
-
-```yaml
-siglip2:
-  dtype: float16
-  attn_implementation: sdpa
-  batch_size: 12
-  prompt_template: "This photo contains: {}."
-  
-  lora_config:
-    r: 8
-    lora_alpha: 16
-    lora_dropout: 0.1
-    target_modules: ["q_proj", "v_proj"]
-    modules_to_save: ["classifier"]
-  
-  trainer_config:
-    num_train_epochs: 1
-    per_device_train_batch_size: 12
-    gradient_accumulation_steps: 4
-    learning_rate: 1.0e-3
-    weight_decay: 0.02
-    warmup_steps: 50
-    logging_steps: 10
-    save_strategy: "epoch"
-    fp16: True
-```
-
-**Key Parameters:**
-- `lora_config`: LoRA adapter settings (rank, alpha, target modules)
-- `trainer_config`: Training hyperparameters (epochs, batch size, learning rate)
-- `prompt_template`: Template for zero-shot classification prompts
-
 ---
 
 ## Output Structure
@@ -346,17 +238,6 @@ outputs/
 │           ├── per_class.csv
 │           ├── dataset_metrics.csv
 │           └── confusion_matrix.csv
-│
-└── fine_tune_classification/
-    └── siglip2/
-        └── fold_1_train17_val10/
-            ├── adapter_config.json
-            ├── adapter_model.safetensors
-            ├── predictions.csv
-            ├── metrics.csv
-            ├── per_class.csv
-            ├── dataset_metrics.csv
-            └── confusion_matrix.csv
 ```
 
 ### Output Files
@@ -379,48 +260,5 @@ outputs/
 
 **confusion_matrix.csv**
 - Full confusion matrix with true vs predicted labels
-
----
-
-## Analysis
-
-### Aggregate Metrics by Dataset
-
-Use the Jupyter notebook to compute dataset-level metrics from per-class results:
-
-```bash
-jupyter notebook aggregate_metrics_by_dataset.ipynb
-```
-
-The notebook:
-1. Loads `per_class.csv`
-2. Parses dataset names from class prefixes (`{dataset_name}-{class_name}`)
-3. Aggregates metrics by dataset
-4. Saves to `dataset_metrics.csv`
-
-**Key Metrics:**
-- **Accuracy**: Weighted average of per-class recall
-- **Precision**: Average precision across classes
-- **Recall**: Average recall across classes
-- **F1 Score**: Average F1 across classes
-- **Support**: Total number of samples per dataset
-- **n_classes**: Number of classes per dataset
-
----
-
-## Dataset Naming Convention
-
-When combining multiple datasets for training, classes are prefixed with their dataset name:
-
-```
-{dataset_name}-{class_name}
-```
-
-**Examples:**
-- `tomato_leaf_disease-Bacterial_spot`
-- `corn_maize_leaf_disease-Common_rust`
-- `arabica_coffee-Cerscospora`
-
-This allows tracking which dataset each class belongs to for cross-dataset evaluation.
 
 ---

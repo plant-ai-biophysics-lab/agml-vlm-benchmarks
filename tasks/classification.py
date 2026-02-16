@@ -162,7 +162,7 @@ def agml_to_df(root: str):
     for class_dir in sorted([p for p in root.iterdir() if p.is_dir()]):
         
         label = class_dir.name
-        for p in class_dir.rglob("*"):
+        for p in sorted(class_dir.rglob("*")):
             
             if p.is_file() and p.suffix.lower() in IMG_EXTS:        
                 rows.append({"id": p.stem, "image_path": str(p), "label": label})

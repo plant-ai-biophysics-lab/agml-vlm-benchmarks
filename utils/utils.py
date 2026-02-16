@@ -28,7 +28,17 @@ def fuzzy_match_label(generated_text: str, candidate_labels: list, threshold: fl
     Returns:
         tuple: (matched_index, similarity_score, matched_label) or (None, 0, None) if no match
     """
+    # Clean and normalize the generated text
     generated_lower = generated_text.lower().strip()
+    
+    # Remove common prefixes/suffixes that models sometimes add
+    prefixes_to_remove = ['the answer is', 'category:', 'class:', 'label:', 'answer:', 'it is', 'this is']
+    for prefix in prefixes_to_remove:
+        if generated_lower.startswith(prefix):
+            generated_lower = generated_lower[len(prefix):].strip()
+    
+    # Remove trailing punctuation
+    generated_lower = generated_lower.rstrip('.,;:!?')
     
     best_match_idx = None
     best_score = 0.0
@@ -38,6 +48,10 @@ def fuzzy_match_label(generated_text: str, candidate_labels: list, threshold: fl
         label_lower = label.lower().strip()
         
         # Exact match (highest priority)
+        if label_lower == generated_lower:
+            return idx, 1.0, label
+        
+        # Check if label is contained in generated text or vice versa
         if label_lower in generated_lower or generated_lower in label_lower:
             return idx, 1.0, label
         
@@ -45,8 +59,8 @@ def fuzzy_match_label(generated_text: str, candidate_labels: list, threshold: fl
         similarity = SequenceMatcher(None, generated_lower, label_lower).ratio()
         
         # Also check if label words are in generated text
-        label_words = set(label_lower.replace('_', ' ').split())
-        generated_words = set(generated_lower.replace('_', ' ').split())
+        label_words = set(label_lower.replace('_', ' ').replace('-', ' ').split())
+        generated_words = set(generated_lower.replace('_', ' ').replace('-', ' ').split())
         word_overlap = len(label_words & generated_words) / len(label_words) if label_words else 0
         
         # Take the maximum of both similarity measures
@@ -138,24 +152,49 @@ def save_classification_results(
     y_true,
     output_dir='outputs',
     generated_texts=None,
-    match_scores=None
+    match_scores=None,
+    **extra_columns
 ):
     """
     Save classification results with optional generated texts and match scores for debugging.
+    Handles MCQA mode where "None of the above" may be the correct answer.
     
     Args:
         candidate_labels: List of possible class labels
         preds_ids: List of predicted class indices
         probs_rows: List of probability distributions
         df: DataFrame with image paths and true labels
-        y_true: Array of true class indices
+        y_true: Array of true class indices (may include -1 for "None of the above" in MCQA)
         output_dir: Directory to save results
         generated_texts: Optional list of raw generated texts from models
         match_scores: Optional list of fuzzy match scores
+        **extra_columns: Additional columns to add to the predictions CSV (e.g., answer_included, mcqa_correct_answer, chosen_option)
     """
     
     # make output dir
     os.makedirs(output_dir, exist_ok=True)
+    
+    # Check if this is MCQA mode (if y_true contains -1 or mcqa_correct_answer is in extra_columns)
+    is_mcqa = 'mcqa_correct_answer' in extra_columns or (hasattr(y_true, '__iter__') and -1 in y_true)
+    
+    # For MCQA, add "None of the above" to candidate labels for metrics
+    if is_mcqa:
+        extended_labels = candidate_labels + ["None of the above"]
+        # Map -1 to the index of "None of the above"
+        none_of_above_idx = len(candidate_labels)
+        y_true = [none_of_above_idx if y == -1 else y for y in y_true]
+        preds_ids = [none_of_above_idx if p == -1 else p for p in preds_ids]
+        
+        # Extend probability rows to include "None of the above"
+        extended_probs_rows = []
+        for p in probs_rows:
+            extended_p = list(p) + [0.0]  # Add 0 probability for "None of the above"
+            extended_probs_rows.append(extended_p)
+        probs_rows = extended_probs_rows
+        
+        labels_for_metrics = extended_labels
+    else:
+        labels_for_metrics = candidate_labels
     
     # prepare output dataframes
     predictions_csv = f"{output_dir}/predictions.csv"
@@ -166,31 +205,54 @@ def save_classification_results(
     
     # Debug: Check dimensions
     print(f"Number of candidate labels: {len(candidate_labels)}")
+    print(f"Number of labels for metrics: {len(labels_for_metrics)}")
     print(f"Number of predictions: {len(preds_ids)}")
     print(f"Number of probability rows: {len(probs_rows)}")
     if probs_rows:
         print(f"Shape of first prob row: {len(probs_rows[0])}")
     
-    # Ensure probabilities match candidate labels length
-    if probs_rows and len(probs_rows[0]) != len(candidate_labels):
-        print(f"WARNING: Probability dimension ({len(probs_rows[0])}) != number of labels ({len(candidate_labels)})")
+    # Ensure probabilities match labels_for_metrics length
+    if probs_rows and len(probs_rows[0]) != len(labels_for_metrics):
+        print(f"WARNING: Probability dimension ({len(probs_rows[0])}) != number of labels ({len(labels_for_metrics)})")
         print("Truncating or padding probabilities to match labels...")
         
         # Pad or truncate each probability row
         fixed_probs_rows = []
         for p in probs_rows:
-            if len(p) < len(candidate_labels):
+            if len(p) < len(labels_for_metrics):
                 # Pad with zeros
-                fixed_p = list(p) + [0.0] * (len(candidate_labels) - len(p))
+                fixed_p = list(p) + [0.0] * (len(labels_for_metrics) - len(p))
             else:
                 # Truncate
-                fixed_p = list(p[:len(candidate_labels)])
+                fixed_p = list(p[:len(labels_for_metrics)])
             fixed_probs_rows.append(fixed_p)
         probs_rows = fixed_probs_rows
     
     # Handle None values in preds_ids (for non-matches in open-ended evaluation)
-    pred_labels = [candidate_labels[i] if i is not None else None for i in preds_ids]
+    pred_labels = [labels_for_metrics[i] if i is not None else None for i in preds_ids]
     top_scores = [row[idx] if idx is not None else 0.0 for row, idx in zip(probs_rows, preds_ids)]
+
+    # If generated_texts are available, map fuzzy matches for "None of the above"
+    # to the MCQA none_of_above index so excluded samples are counted correctly.
+    if is_mcqa and generated_texts is not None:
+        for i, gen in enumerate(generated_texts):
+            if i >= len(preds_ids):
+                break
+            if preds_ids[i] is None and isinstance(gen, str) and gen.strip():
+                try:
+                    m_idx, m_score, m_label = fuzzy_match_label(gen, labels_for_metrics)
+                except Exception:
+                    m_idx = None
+                    m_score = 0.0
+                    m_label = None
+                if m_idx is not None and m_label and 'none' in m_label.lower():
+                    # assign the matched "None of the above" index
+                    preds_ids[i] = m_idx
+                    pred_labels[i] = m_label
+                    if probs_rows and i < len(probs_rows) and m_idx < len(probs_rows[i]):
+                        top_scores[i] = probs_rows[i][m_idx]
+                    if match_scores is not None:
+                        match_scores[i] = m_score
 
     out_df = pd.DataFrame({
         "id": df["id"],
@@ -206,8 +268,13 @@ def save_classification_results(
     if match_scores is not None:
         out_df["match_score"] = match_scores
     
+    # Add any extra columns (e.g., answer_included for MCQA)
+    for col_name, col_data in extra_columns.items():
+        if col_data is not None:
+            out_df[col_name] = col_data
+    
     out_df["probs_json"] = [
-        json.dumps({candidate_labels[j]: float(p[j]) for j in range(len(candidate_labels))})
+        json.dumps({labels_for_metrics[j]: float(p[j]) for j in range(len(labels_for_metrics))})
         for p in probs_rows
     ]
     
@@ -229,11 +296,12 @@ def save_classification_results(
                 f.write(json.dumps(log_entry) + '\n')
         print(f"Debug log saved to: {debug_log}")
 
-    # Prepare predictions for metrics (convert None to -1 for sklearn)
-    preds_ids_for_metrics = [p if p is not None else -1 for p in preds_ids]
+    # Prepare predictions for metrics (convert None to a new index beyond valid range)
+    # This ensures None predictions are counted as incorrect
+    max_label_idx = len(labels_for_metrics)
+    preds_ids_for_metrics = [p if p is not None else max_label_idx for p in preds_ids]
     
     # Calculate metrics
-    # Note: -1 predictions (non-matches) will be counted as incorrect
     acc = accuracy_score(y_true, preds_ids_for_metrics)
     p_w, r_w, f1_w, _ = precision_recall_fscore_support(y_true, preds_ids_for_metrics, average="weighted", zero_division=0)
     p_m, r_m, f1_m, _ = precision_recall_fscore_support(y_true, preds_ids_for_metrics, average="macro", zero_division=0)
@@ -241,25 +309,49 @@ def save_classification_results(
     # Count non-matches
     num_non_matches = sum(1 for p in preds_ids if p is None)
 
-    pd.DataFrame([{
+    metrics_dict = {
         "accuracy": acc,
         "precision_weighted": p_w, "recall_weighted": r_w, "f1_weighted": f1_w,
         "precision_macro": p_m, "recall_macro": r_m, "f1_macro": f1_m,
-        "num_classes": len(candidate_labels),
+        "num_classes": len(labels_for_metrics),
         "num_images": len(df),
         "num_non_matches": num_non_matches,
-    }]).to_csv(metrics_csv, index=False)
+    }
+    
+    # Add MCQA-specific metrics if applicable
+    if is_mcqa and 'answer_included' in extra_columns:
+        answer_included = extra_columns['answer_included']
+        # Calculate accuracy for samples where answer was included
+        included_mask = [i for i, inc in enumerate(answer_included) if inc]
+        if included_mask:
+            y_true_included = [y_true[i] for i in included_mask]
+            preds_included = [preds_ids_for_metrics[i] for i in included_mask]
+            acc_included = accuracy_score(y_true_included, preds_included)
+            metrics_dict['accuracy_answer_included'] = acc_included
+        
+        # Calculate accuracy for samples where answer was NOT included
+        excluded_mask = [i for i, inc in enumerate(answer_included) if not inc]
+        if excluded_mask:
+            y_true_excluded = [y_true[i] for i in excluded_mask]
+            preds_excluded = [preds_ids_for_metrics[i] for i in excluded_mask]
+            acc_excluded = accuracy_score(y_true_excluded, preds_excluded)
+            metrics_dict['accuracy_answer_not_included'] = acc_excluded
+        
+        metrics_dict['num_answer_included'] = len(included_mask)
+        metrics_dict['num_answer_not_included'] = len(excluded_mask)
+    
+    pd.DataFrame([metrics_dict]).to_csv(metrics_csv, index=False)
 
     # per-class
     report = classification_report(
         y_true, preds_ids_for_metrics,
-        labels=list(range(len(candidate_labels))),  # Explicitly specify valid labels (exclude -1)
-        target_names=candidate_labels,
+        labels=list(range(len(labels_for_metrics))),  # Use all labels including "None of the above" if MCQA
+        target_names=labels_for_metrics,
         output_dict=True, zero_division=0
     )
     
     per_class_rows = []
-    for cls in candidate_labels:
+    for cls in labels_for_metrics:
         r = report.get(cls, {})
         per_class_rows.append({
             "class": cls,
@@ -272,12 +364,12 @@ def save_classification_results(
     pd.DataFrame(per_class_rows).to_csv(per_class_csv, index=False)
 
     # confusion matrix
-    cm = confusion_matrix(y_true, preds_ids_for_metrics, labels=list(range(len(candidate_labels))))
+    cm = confusion_matrix(y_true, preds_ids_for_metrics, labels=list(range(len(labels_for_metrics))))
     
     cm_df = pd.DataFrame(
         cm,
-        index=[f"true::{c}" for c in candidate_labels],
-        columns=[f"pred::{c}" for c in candidate_labels],
+        index=[f"true::{c}" for c in labels_for_metrics],
+        columns=[f"pred::{c}" for c in labels_for_metrics],
     )
     
     cm_df.to_csv(confusion_matrix_csv, index=True)
@@ -285,6 +377,8 @@ def save_classification_results(
     print(f"Saved classification results to {output_dir}")
     if num_non_matches > 0:
         print(f"Warning: {num_non_matches}/{len(df)} predictions had no fuzzy match (returned None)")
+    if is_mcqa:
+        print(f"MCQA mode: Added 'None of the above' to labels for metrics and confusion matrix")
     
 def plot_confusion_matrix(cm, classes, title='Confusion Matrix', cmap=plt.cm.Reds, figsize=(10, 8)):
 
