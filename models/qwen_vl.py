@@ -2,13 +2,15 @@ import torch
 import os
 
 from tqdm import tqdm
-from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+from transformers import Qwen2_5_VLForConditionalGeneration, Qwen3VLForConditionalGeneration, AutoProcessor
 from qwen_vl_utils import process_vision_info
 from datasets import load_dataset
 from trl import SFTConfig, SFTTrainer
 from peft import LoraConfig
+from typing import Optional
 
 from tasks.classification import load_agml_dataset, agml_to_df
+from utils.prep_context import create_classification_message
 from utils.utils import batched, save_classification_results, fuzzy_match_label
 from utils.mcqa import get_mcqa_choices, load_all_dataset_classes
 
@@ -87,7 +89,14 @@ def train(args: dict, model_type: str, dataset: str | dict, output_dir: str):
         device_map="auto", 
         attn_implementation=args["attn_implementation"]
     )
-    processor = AutoProcessor.from_pretrained(model_type)
+    processor_kwargs = {}
+    if args.get("min_pixels") is not None:
+        processor_kwargs["min_pixels"] = args["min_pixels"]
+    if args.get("max_pixels") is not None:
+        processor_kwargs["max_pixels"] = args["max_pixels"]
+    processor = AutoProcessor.from_pretrained(model_type, **processor_kwargs)
+    if processor_kwargs:
+        print(f"Image size constraint: min_pixels={processor_kwargs.get('min_pixels')}, max_pixels={processor_kwargs.get('max_pixels')}")
     
     # Fix for Qwen2.5-VL batch processing bug - set padding side to left
     # See: https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/discussions/54
@@ -123,7 +132,16 @@ def train(args: dict, model_type: str, dataset: str | dict, output_dir: str):
         trained_weights=output_dir
     )
 
-def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model: bool = False, trained_weights: str = None):
+def test(
+    args: dict, 
+    model_type: str, 
+    dataset: str, 
+    output_dir: str, 
+    lora_model: bool = False, 
+    trained_weights: str = None, 
+    context: dict = None,
+    max_num_class_context: Optional[int] = None
+):
     
     # get dataset path
     if not lora_model:
@@ -168,9 +186,21 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
     if not mcqa_options:
         conversation_template = conversation_template.format(classes=classes_str)
     print("Conversation template:", conversation_template)
-        
-    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(model_type, torch_dtype=args["dtype"], device_map="auto", attn_implementation=args["attn_implementation"])
-    processor = AutoProcessor.from_pretrained(model_type)
+    
+    if "3" in model_type:
+        print("Using Qwen VL 3.0 model for testing")
+        model = Qwen3VLForConditionalGeneration.from_pretrained(model_type, torch_dtype=args["dtype"], device_map="auto")
+    else:
+        print("Using Qwen VL 2.5 model for testing")
+        model = Qwen2_5_VLForConditionalGeneration.from_pretrained(model_type, torch_dtype=args["dtype"], device_map="auto")
+    processor_kwargs = {}
+    if args.get("min_pixels") is not None:
+        processor_kwargs["min_pixels"] = args["min_pixels"]
+    if args.get("max_pixels") is not None:
+        processor_kwargs["max_pixels"] = args["max_pixels"]
+    processor = AutoProcessor.from_pretrained(model_type, **processor_kwargs)
+    if processor_kwargs:
+        print(f"Image size constraint: min_pixels={processor_kwargs.get('min_pixels')}, max_pixels={processor_kwargs.get('max_pixels')}")
     
     # Fix for Qwen2.5-VL batch processing bug - set padding side to left
     # See: https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/discussions/54
@@ -186,6 +216,9 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
     generated_texts = []
     match_scores = []
     chosen_options = []  # Track which option number (1, 2, 3, ...) was chosen
+    num_context_examples_list = []  # Track context image count per sample
+    num_context_classes_list = []   # Track context class count per sample
+    total_input_tokens_list = []    # Track actual (non-padded) input token count per sample
     
     sample_index = 0
     batch_start_index = 0
@@ -218,19 +251,41 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
                 prompt = conversation_template.format(classes=sample_choices_str)
             else:
                 prompt = conversation_template
+                
+            if context is not None:
+                
+                # in-context learning prompt with examples
+                message, context_meta = create_classification_message(
+                    task=None, # NOTE: for now will define as None
+                    template=prompt,
+                    query_image_path=image,
+                    context_examples=context,
+                    max_num_class_context=max_num_class_context,
+                    correct_class=df.iloc[sample_index]["label"]
+                    # output_path="temp_message.json"  # Optional: save the message for inspection
+                )
+                conversation = [message]
+                num_context_examples_list.append(context_meta["num_context_examples"])
+                num_context_classes_list.append(context_meta["num_context_classes"])
+                
+            else:
             
-            conversation = [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "image": image,
-                        },
-                        {"type": "text", "text": prompt},
-                    ],
-                },
-            ]
+                # normal zero_shot prompt without context
+                conversation = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "image": image,
+                            },
+                            {"type": "text", "text": prompt},
+                        ],
+                    },
+                ]
+                num_context_examples_list.append(0)
+                num_context_classes_list.append(0)
+                
             conversations.append(conversation)
             sample_index += 1
             
@@ -251,6 +306,10 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
             padding=True,
             return_tensors="pt"
         ).to(model.device)
+
+        # Record actual (non-padded) input token counts per sample in this batch
+        per_sample_input_tokens = inputs.attention_mask.sum(dim=1).tolist()
+        total_input_tokens_list.extend([int(t) for t in per_sample_input_tokens])
 
         with torch.no_grad():
             outputs = model.generate(**inputs, max_new_tokens=50, do_sample=False)
@@ -330,6 +389,14 @@ def test(args: dict, model_type: str, dataset: str, output_dir: str, lora_model:
             extra_cols['mcqa_correct_answer'] = mcqa_correct_answers
         if chosen_options:
             extra_cols['chosen_option'] = chosen_options
+
+    # Always track context and token scaling columns
+    if num_context_examples_list:
+        extra_cols['num_context_examples'] = num_context_examples_list
+    if num_context_classes_list:
+        extra_cols['num_context_classes'] = num_context_classes_list
+    if total_input_tokens_list:
+        extra_cols['total_input_tokens'] = total_input_tokens_list
     
     # For MCQA, we need to adjust y_true to reflect the correct answer
     # (which may be "None of the above" when answer is not included)

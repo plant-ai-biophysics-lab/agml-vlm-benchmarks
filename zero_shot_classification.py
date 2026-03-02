@@ -61,6 +61,12 @@ def main(args):
         
         test(args.cfg, model_type="Qwen/Qwen2.5-VL-72B-Instruct", dataset=args.dataset, output_dir=output_dir)
         
+    elif args.model_type == "qwen_vl_3":
+        
+        from models.qwen_vl import test
+        
+        test(args.cfg, model_type="Qwen/Qwen3-VL-8B-Instruct", dataset=args.dataset, output_dir=output_dir)
+        
     elif args.model_type == "gemma_3":
         
         from models.gemma_3 import test

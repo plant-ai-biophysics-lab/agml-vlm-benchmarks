@@ -88,8 +88,15 @@ llava_next:
 
 qwen_vl:
   dtype: bfloat16
-  attn_implementation: sdpa
-  batch_size: 8
+  # attn_implementation: sdpa
+  batch_size: 1
+
+  # Image size control: set min_pixels == max_pixels to force a fixed resolution.
+  # Qwen2.5-VL uses dynamic tiling; pixels refer to total pixel count (height * width).
+  # Example: 448*448 = 200704 for a fixed 448x448 equivalent.
+  # Set to null to use processor defaults (dynamic resolution).
+  min_pixels: 200704  # 448 * 448
+  max_pixels: 200704  # 448 * 448
 
   # prompt template for classification (uses {classes} placeholder)
   # prompt_template: "What is shown in this image? Choose one: {classes}. Answer with only the class name."
@@ -97,11 +104,15 @@ qwen_vl:
   # prompt_template: "Respond in one sentence: What plant or weed species, if any, is shown in this image?"
   # prompt_template: "Classify this image into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
   prompt_template: "Classify this image of a {plant_type} plant into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
-  # prompt_template: "Respond in one sentence: You are an agricultural expert that is really good at identifying {task}. Given the image please define what {task}, if any, is exhibited in this image of a {plant_type} plant?"
+  # prompt_template: "Respond briefly: You are an agricultural expert. Given the image please define what disease, pest, damage, or other stress, if any, is exhibited in this image of a {plant_type} plant?"
 
   mcqa_options:
     options_within_dataset: True
     mcqa_num_choices: 5 # if options_within_dataset is False, number of random choices to sample
+
+  context_options:
+    max_num_context: 1 # 1 if you want the context to only contain the same class
+    max_num_example: 1
 
   lora_config:
     r: 8
@@ -124,10 +135,60 @@ qwen_vl:
     max_grad_norm: 0.3
     warmup_ratio: 0.03
 
+qwen_vl_72b:
+  dtype: bfloat16
+  attn_implementation: sdpa
+  batch_size: 1
+
+  # prompt template for classification (uses {classes} placeholder)
+  # prompt_template: "What is shown in this image? Choose one: {classes}. Answer with only the class name."
+  # prompt_template: "Respond in one sentence: What disease, pest, damage type, or other stress, if any, is exhibited in this image of a {plant_type} plant?"
+  # prompt_template: "Respond in one sentence: What plant or weed species, if any, is shown in this image?"
+  # prompt_template: "Respond in one sentence: You are an agricultural expert that is really good at identifying {task}. Given the image please define what {task}, if any, is exhibited in this image of a {plant_type} plant?"
+  # prompt_template: "You are an agricultural expert that is really good at identifying {task} species. Given the image please define what species is shown in this image?"
+  # prompt_template: "Classify this image into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
+  prompt_template: "Classify this image of a {plant_type} plant into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
+
+  mcqa_options:
+    options_within_dataset: True
+    mcqa_num_choices: 5 # if options_within_dataset is False, number of random choices to sample
+
+  sample_limit: 0.1 # or 1.0 for full dataset, or None
+
+qwen_vl_3:
+  dtype: bfloat16
+  attn_implementation: sdpa
+  batch_size: 1
+
+  # Image size control: set min_pixels == max_pixels to force a fixed resolution.
+  # Qwen2.5-VL uses dynamic tiling; pixels refer to total pixel count (height * width).
+  # 448*448 = 200704 caps each image at ~1024 visual tokens, keeping inputs manageable.
+  min_pixels: 200704  # 448 * 448
+  max_pixels: 200704  # 448 * 448
+
+  # prompt template for classification (uses {classes} placeholder)
+  # prompt_template: "What is shown in this image? Choose one: {classes}. Answer with only the class name."
+  # prompt_template: "Respond in one sentence: What disease, pest, damage type, or other stress, if any, is exhibited in this image of a {plant_type} plant?"
+  # prompt_template: "Respond in one sentence: What plant or weed species, if any, is shown in this image?"
+  # prompt_template: "Classify this image into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
+  prompt_template: "Classify this image of a {plant_type} plant into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
+  # prompt_template: "Respond briefly: You are an agricultural expert. Given the image please define what disease, pest, damage, or other stress, if any, is exhibited in this image of a {plant_type} plant?"
+
+  mcqa_options:
+    options_within_dataset: True
+    mcqa_num_choices: 5 # if options_within_dataset is False, number of random choices to sample
+
+  context_options:
+    max_num_context: 1 # 1 if you want the context to only contain the same class
+    max_num_example: 1
+
 gemma_3:
   dtype: bfloat16
   attn_implementation: sdpa
   batch_size: 8
+
+  min_pixels: 200704  # 448 * 448
+  max_pixels: 200704  # 448 * 448
 
   # prompt template for classification (uses {classes} placeholder)
   prompt_template: "What is shown in this image? Choose one: {classes}. Answer with only the class name."
@@ -163,26 +224,6 @@ deepseek_vl:
   prompt_template: "<image_placeholder>What is shown in this image? Choose one: {classes}. Answer with only the class name."
   # prompt_template: "<image_placeholder>What disease, pest, damage type, or other stress, if any, is exhibited in this image of a {plant_type} plant?"
   # prompt_template: "<image_placeholder>Respond in one sentence: What plant or weed species, if any, is shown in this image?"
-
-qwen_vl_72b:
-  dtype: bfloat16
-  attn_implementation: sdpa
-  batch_size: 1
-
-  # prompt template for classification (uses {classes} placeholder)
-  # prompt_template: "What is shown in this image? Choose one: {classes}. Answer with only the class name."
-  # prompt_template: "Respond in one sentence: What disease, pest, damage type, or other stress, if any, is exhibited in this image of a {plant_type} plant?"
-  # prompt_template: "Respond in one sentence: What plant or weed species, if any, is shown in this image?"
-  # prompt_template: "Respond in one sentence: You are an agricultural expert that is really good at identifying {task}. Given the image please define what {task}, if any, is exhibited in this image of a {plant_type} plant?"
-  # prompt_template: "You are an agricultural expert that is really good at identifying {task} species. Given the image please define what species is shown in this image?"
-  # prompt_template: "Classify this image into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
-  prompt_template: "Classify this image of a {plant_type} plant into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
-
-  mcqa_options:
-   options_within_dataset: True
-   mcqa_num_choices: 5 # if options_within_dataset is False, number of random choices to sample
-
-  sample_limit: 0.1 # or 1.0 for full dataset, or None
 
 gpt-5-nano:
   batch_size: 1
