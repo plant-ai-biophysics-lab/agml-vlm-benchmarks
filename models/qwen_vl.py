@@ -140,7 +140,9 @@ def test(
     lora_model: bool = False, 
     trained_weights: str = None, 
     context: dict = None,
-    max_num_class_context: Optional[int] = None
+    max_num_class_context: Optional[int] = None,
+    include_correct_class: bool = True,
+    random_pool: bool = False
 ):
     
     # get dataset path
@@ -172,7 +174,7 @@ def test(
     mcqa_choices_list = []  # Track the choices for each sample
     
     if mcqa_options:
-        print(f"\nMCQA Mode Enabled:")
+        print("\nMCQA Mode Enabled:")
         print(f"  Options within dataset: {mcqa_options.get('options_within_dataset', True)}")
         print(f"  Number of choices: {mcqa_options.get('mcqa_num_choices', 4)}")
         
@@ -261,7 +263,9 @@ def test(
                     query_image_path=image,
                     context_examples=context,
                     max_num_class_context=max_num_class_context,
-                    correct_class=df.iloc[sample_index]["label"]
+                    correct_class=df.iloc[sample_index]["label"],
+                    include_correct_class=include_correct_class,
+                    random_pool=random_pool,
                     # output_path="temp_message.json"  # Optional: save the message for inspection
                 )
                 conversation = [message]

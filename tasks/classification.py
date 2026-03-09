@@ -2,6 +2,7 @@ import agml
 import os
 import pandas as pd
 import shutil
+import yaml
 
 from pathlib import Path
 from ultralytics.data.split import split_classify_dataset
@@ -151,6 +152,13 @@ def candidate_labels(dataset_path: str):
     
     return class_names
 
+def clean_label(label: str):
+    
+    # replace underscores and dashes with spaces, and lowercase
+    clean = label.replace("_", " ").replace("-", " ").lower()
+    
+    return clean
+
 def agml_to_df(root: str):
     
     # ensure str is Path object
@@ -162,6 +170,7 @@ def agml_to_df(root: str):
     for class_dir in sorted([p for p in root.iterdir() if p.is_dir()]):
         
         label = class_dir.name # use folder name as label
+        label = clean_label(label) # clean label
         for p in sorted(class_dir.rglob("*")):
             
             if p.is_file() and p.suffix.lower() in IMG_EXTS:        
@@ -171,3 +180,30 @@ def agml_to_df(root: str):
         raise ValueError(f"No images found under {root}")
     
     return pd.DataFrame(rows)
+
+def load_fold_split(fold: str, split: str, splits_path: str = "splits.yaml") -> tuple[str, list[str]]:
+    """Load a combined dataset path for a given fold and split.
+
+    Reads splits.yaml, resolves the dataset list for the requested fold+split,
+    and delegates to load_agml_dataset to build a combined directory.
+
+    Args:
+        fold:        Fold name from splits.yaml (e.g. 'fold_1', 'fold_2', 'fold_3').
+        split:       'train' or 'val'.
+        splits_path: Path to the splits YAML file.
+
+    Returns:
+        (combined_path, dataset_names) — path to the merged dataset directory and
+        the list of individual dataset names that were combined.
+    """
+    with open(splits_path) as f:
+        splits = yaml.safe_load(f)
+
+    if fold not in splits:
+        raise ValueError(f"Fold '{fold}' not found in {splits_path}. Available: {list(splits.keys())}")
+    if split not in splits[fold]:
+        raise ValueError(f"Split '{split}' not found under fold '{fold}' in {splits_path}.")
+
+    datasets = splits[fold][split]
+    combined_path = load_agml_dataset(datasets, split_name=f"{fold}_{split}")
+    return combined_path, datasets

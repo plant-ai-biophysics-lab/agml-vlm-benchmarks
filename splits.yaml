@@ -1,5 +1,51 @@
-fold_1:
+# ─── Disease (17 datasets, 3-fold CV) ───────────────────────────────────────
+# Group A (val in fold 1): arabica, banana, bean, betel, blackgram, coconut
+# Group B (val in fold 2): corn, cucumber, guava, java_plum, orange, paddy
+# Group C (val in fold 3): papaya, rice, sunflower, tea, tomato
 
+disease_fold_1:
+  train:
+    - corn_maize_leaf_disease
+    - cucumber_disease_classification
+    - guava_disease_pakistan
+    - java_plum_leaf_disease_classification
+    - orange_leaf_disease_classification
+    - paddy_disease_classification
+    - papaya_leaf_disease_classification
+    - rice_leaf_disease_classification
+    - sunflower_disease_classification
+    - tea_leaf_disease_classification
+    - tomato_leaf_disease
+  val:
+    - arabica_coffee_leaf_disease_classification
+    - banana_leaf_disease_classification
+    - bean_disease_uganda
+    - betel_leaf_disease_classification
+    - blackgram_plant_leaf_disease_classification
+    - coconut_tree_disease_classification
+
+disease_fold_2:
+  train:
+    - arabica_coffee_leaf_disease_classification
+    - banana_leaf_disease_classification
+    - bean_disease_uganda
+    - betel_leaf_disease_classification
+    - blackgram_plant_leaf_disease_classification
+    - coconut_tree_disease_classification
+    - papaya_leaf_disease_classification
+    - rice_leaf_disease_classification
+    - sunflower_disease_classification
+    - tea_leaf_disease_classification
+    - tomato_leaf_disease
+  val:
+    - corn_maize_leaf_disease
+    - cucumber_disease_classification
+    - guava_disease_pakistan
+    - java_plum_leaf_disease_classification
+    - orange_leaf_disease_classification
+    - paddy_disease_classification
+
+disease_fold_3:
   train:
     - arabica_coffee_leaf_disease_classification
     - banana_leaf_disease_classification
@@ -13,97 +59,41 @@ fold_1:
     - java_plum_leaf_disease_classification
     - orange_leaf_disease_classification
     - paddy_disease_classification
-    - soybean_insect_classification
-    - chilli_leaf_classification
-    - onion_leaf_classification
-    - rangeland_weeds_australia
-    - plant_seedlings_aarhus
-
   val:
     - papaya_leaf_disease_classification
-    - plant_village_classification
     - rice_leaf_disease_classification
     - sunflower_disease_classification
     - tea_leaf_disease_classification
     - tomato_leaf_disease
+
+# ─── Pest/damage (5 datasets, 3-fold CV) ─────────────────────────────────────
+# Group A (val in fold 1): chilli, onion
+# Group B (val in fold 2): soybean_insect, sugarcane
+# Group C (val in fold 3): vine
+
+pest_damage_fold_1:
+  train:
+    - soybean_insect_classification
     - sugarcane_damage_usa
     - vine_virus_photo_dataset
-    - crop_weeds_greece
-    - soybean_weed_uav_brazil
-
-fold_2:
-
-  train:
-      - arabica_coffee_leaf_disease_classification
-      - banana_leaf_disease_classification
-      - bean_disease_uganda
-      - betel_leaf_disease_classification
-      - blackgram_plant_leaf_disease_classification
-      - coconut_tree_disease_classification
-      - papaya_leaf_disease_classification
-      - plant_village_classification
-      - rice_leaf_disease_classification
-      - sunflower_disease_classification
-      - tea_leaf_disease_classification
-      - tomato_leaf_disease
-      - soybean_insect_classification
-      - chilli_leaf_classification
-      - sugarcane_damage_usa
-      - vine_virus_photo_dataset
-      - rangeland_weeds_australia
-      - crop_weeds_greece
-      - soybean_weed_uav_brazil
-
   val:
-      - corn_maize_leaf_disease
-      - cucumber_disease_classification
-      - guava_disease_pakistan
-      - java_plum_leaf_disease_classification
-      - orange_leaf_disease_classification
-      - paddy_disease_classification
-      - onion_leaf_classification
-      - plant_seedlings_aarhus
+    - chilli_leaf_classification
+    - onion_leaf_classification
 
-fold_3:
-
+pest_damage_fold_2:
   train:
-      - corn_maize_leaf_disease
-      - cucumber_disease_classification
-      - guava_disease_pakistan
-      - java_plum_leaf_disease_classification
-      - orange_leaf_disease_classification
-      - paddy_disease_classification
-      - papaya_leaf_disease_classification
-      - plant_village_classification
-      - rice_leaf_disease_classification
-      - sunflower_disease_classification
-      - tea_leaf_disease_classification
-      - tomato_leaf_disease
-      - onion_leaf_classification
-      - sugarcane_damage_usa
-      - vine_virus_photo_dataset
-      - plant_seedlings_aarhus
-      - crop_weeds_greece
-      - soybean_weed_uav_brazil
-
+    - chilli_leaf_classification
+    - onion_leaf_classification
+    - vine_virus_photo_dataset
   val:
-      - arabica_coffee_leaf_disease_classification
-      - banana_leaf_disease_classification
-      - bean_disease_uganda
-      - betel_leaf_disease_classification
-      - blackgram_plant_leaf_disease_classification
-      - coconut_tree_disease_classification
-      - soybean_insect_classification
-      - chilli_leaf_classification
-      - rangeland_weeds_australia
+    - soybean_insect_classification
+    - sugarcane_damage_usa
 
-test_fold:
-
+pest_damage_fold_3:
   train:
-      - corn_maize_leaf_disease
-      - tomato_leaf_disease
-      - soybean_weed_uav_brazil
-
+    - chilli_leaf_classification
+    - onion_leaf_classification
+    - soybean_insect_classification
+    - sugarcane_damage_usa
   val:
-      - arabica_coffee_leaf_disease_classification
-      - banana_leaf_disease_classification
+    - vine_virus_photo_dataset
