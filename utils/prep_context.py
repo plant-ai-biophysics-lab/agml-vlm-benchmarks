@@ -98,7 +98,7 @@ def create_classification_message(
     content = [
         {
             "type": "text",
-            "text": "Here are examples of disease, pest, damage, or other stress from the same plant:",
+            "text": "Here are image and label examples of disease, pest, damage, or other stresses:",
         }
     ]
     
