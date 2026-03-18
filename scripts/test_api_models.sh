@@ -6,17 +6,19 @@ usage() {
     echo ""
     echo "Required arguments:"
     echo "  --dataset DATASET    Dataset name (e.g., bean_disease_uganda)"
-    echo "  --model MODEL        API model to use (gpt-5, gpt-5-nano, gemini_25_flash_lite, etc.)"
+    echo "  --model MODEL        API model key from zero_shot_classification.py"
+    echo "                     Recommended: gpt-5, gpt-5-nano, gemini-3-pro-preview, claude-haiku-4-5"
+    echo "                     Also accepted by dispatcher: gemini_25_flash, claude-sonnet-4-5, claude-opus-4-5"
     echo ""
     echo "Optional arguments:"
     echo "  --config FILE        Path to config file (default: configs.yaml)"
-    echo "  --output-dir DIR     Output directory (default: /group/jmearlesgrp/intermediate_data/eranario/vlm-investigation)"
+    echo "  --output-dir DIR     Output directory (default: ./outputs)"
     echo "  --plant-type TYPE    Plant type for prompt templates (e.g., 'coffee', 'bean')"
     echo "  --task TASK          Task type for prompt templates (e.g., 'disease', 'pest/damage', 'crops/weeds')"
     echo ""
     echo "Examples:"
     echo "  $0 --dataset bean_disease_uganda --model gpt-5-nano"
-    echo "  $0 --dataset arabica_coffee_leaf_disease_classification --model gemini_25_flash_lite --plant-type coffee --task disease"
+    echo "  $0 --dataset arabica_coffee_leaf_disease_classification --model gemini-3-pro-preview --plant-type coffee --task disease"
     echo ""
     exit 1
 }
@@ -24,8 +26,10 @@ usage() {
 # Parse command line arguments
 DATASET=""
 MODEL=""
-CONFIG="configs.yaml"
-OUTPUT_DIR="/group/jmearlesgrp/intermediate_data/eranario/vlm-investigation/zero_shot_classification/mcqa_1"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+CONFIG="$REPO_ROOT/configs.yaml"
+OUTPUT_DIR="$REPO_ROOT/outputs"
 PLANT_TYPE=""
 TASK=""
 
@@ -126,7 +130,7 @@ echo "Running zero-shot classification..."
 echo ""
 
 # Build command with optional parameters
-CMD="python zero_shot_classification.py --dataset \"$DATASET\" --model-type \"$MODEL\" --config \"$CONFIG\" --output-dir \"$OUTPUT_DIR\""
+CMD="python $REPO_ROOT/zero_shot_classification.py --dataset \"$DATASET\" --model-type \"$MODEL\" --config \"$CONFIG\" --output-dir \"$OUTPUT_DIR\""
 
 if [ -n "$PLANT_TYPE" ]; then
     CMD="$CMD --plant-type \"$PLANT_TYPE\""
@@ -145,7 +149,7 @@ echo "======================================"
 if [ $EXIT_CODE -eq 0 ]; then
     echo "✓ API Testing Complete"
     echo "======================================"
-    echo "Results saved to: $OUTPUT_DIR/zero_shot_classification/oeq_1/$MODEL/$DATASET"
+    echo "Results saved to: $OUTPUT_DIR/$MODEL/$DATASET"
 else
     echo "❌ API Testing Failed (exit code: $EXIT_CODE)"
     echo "======================================"

@@ -48,11 +48,12 @@ Options:
                         0=very unsure, 1=possibly same, 2=clearly same
   --max-workers N       Parallel workers (default: 10)
   --device DEVICE       Device for local models: auto, cuda, cpu (default: auto)
-  --reasoning LEVEL     Reasoning effort: low, medium, high (default: medium)
+    --reasoning-level LVL Reasoning effort: low, medium, high (default: medium)
+    --reasoning LEVEL     Alias for --reasoning-level
   --help               Show this help message
 
 Environment Variables:
-  MODEL, PROVIDER, THRESHOLD, MAX_WORKERS, DEVICE, REASONING_LEVEL
+    MODEL, PROVIDER, THRESHOLD, MAX_WORKERS, DEVICE, REASONING_LEVEL
   (Command-line options override environment variables)
 
 Examples:
@@ -101,7 +102,7 @@ while [[ $# -gt 0 ]]; do
             DEVICE="$2"
             shift 2
             ;;
-        --reasoning)
+        --reasoning|--reasoning-level)
             REASONING_LEVEL="$2"
             shift 2
             ;;

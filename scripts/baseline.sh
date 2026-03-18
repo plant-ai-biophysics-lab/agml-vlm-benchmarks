@@ -1,9 +1,13 @@
 # Configuration
 MODE="${1:-zero_shot}"
 MODEL_TYPE="${2:-gemma_3}"
-CONFIG_FILE="../configs.yaml"
-OUTPUT_DIR="outputs"
-DATASET_FILE="../datasets.txt"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+CONFIG_FILE="$REPO_ROOT/configs.yaml"
+OUTPUT_DIR="$REPO_ROOT/outputs"
+DATASET_FILE="$REPO_ROOT/datasets.txt"
 
 echo "======================================"
 echo "Starting batch processing"
@@ -15,10 +19,10 @@ echo ""
 
 # Determine which script to run
 if [ "$MODE" = "fine_tune" ]; then
-    SCRIPT="../fine_tune_classification.py"
+    SCRIPT="$REPO_ROOT/fine_tune_classification.py"
     echo "Running fine-tune classification"
 elif [ "$MODE" = "zero_shot" ]; then
-    SCRIPT="../zero_shot_classification.py"
+    SCRIPT="$REPO_ROOT/zero_shot_classification.py"
     echo "Running zero-shot classification"
 else
     echo "ERROR: Invalid mode '$MODE'. Must be 'zero_shot' or 'fine_tune'"

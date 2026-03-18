@@ -1,264 +1,175 @@
 # VLM Investigation: Agricultural Image Classification
 
-This repository contains scripts for evaluating and fine-tuning Vision-Language Models (VLMs) on agricultural image classification tasks using the AgML dataset library.
+Lightweight repo for evaluating vision-language models on AgML classification datasets.
 
-## Table of Contents
-- [VLM Investigation: Agricultural Image Classification](#vlm-investigation-agricultural-image-classification)
-  - [Table of Contents](#table-of-contents)
-  - [Overview](#overview)
-  - [Setup](#setup)
-    - [1. Environment Setup](#1-environment-setup)
-    - [2. API Keys Setup (For API Models Only)](#2-api-keys-setup-for-api-models-only)
-  - [Quick Start](#quick-start)
-    - [HuggingFace Models (Zero-Shot)](#huggingface-models-zero-shot)
-    - [API Models (Zero-Shot)](#api-models-zero-shot)
-  - [Usage](#usage)
-    - [Zero-Shot Classification](#zero-shot-classification)
-    - [Batch Processing](#batch-processing)
-      - [Local (Sequential Processing)](#local-sequential-processing)
-    - [LLM Judge Evaluation](#llm-judge-evaluation)
-      - [Why Use LLM Judge?](#why-use-llm-judge)
-      - [Quick Start](#quick-start-1)
-      - [Batch Evaluation](#batch-evaluation)
-      - [Confidence Scores](#confidence-scores)
-      - [Output Files](#output-files)
-  - [Output Structure](#output-structure)
-    - [Output Files](#output-files-1)
+This README is intentionally focused on current, runnable workflows.
 
----
+## What to run
 
-## Overview
+### Zero-shot entrypoint
 
-**Supported Models:**
+Use:
 
-*HuggingFace Models (Local):*
-- `siglip2` - Google SigLIP v2 (base-patch16-224)
-- `llava_next` - LLaVA-Next (llama3-8b)
-- `qwen_vl` - Qwen2.5-VL (7B-Instruct or 72B-Instruct)
-- `gemma_3` - Gemma 3 (4B-it)
-- `deepseek_vl` - Deepseek VL 7B Chat
-- `yolo` - YOLO11 classification
-
-*API-Based Models:*
-- `gpt-5` - OpenAI GPT-5
-- `gpt-5-nano` - OpenAI GPT-5-nano
-- `gemini-3-pro` - Gemini 3 Pro
-- `claude-haiku-4-5` - Claude Haiku 4.5
-  
-**Datasets:**
-- 28 agricultural classification datasets from AgML
-- Includes plant disease detection, weed classification, pest identification, etc.
-- See `datasets.txt` for complete list
-
----
-
-## Setup
-
-### 1. Environment Setup
-
-**For HuggingFace Models:**
 ```bash
-# Create conda environment
-conda create -n vlm python=3.10
+python zero_shot_classification.py \
+  --dataset arabica_coffee_leaf_disease_classification \
+  --model-type qwen_vl \
+  --config configs.yaml \
+  --output-dir outputs/
+```
+
+### In-context entrypoint (with optional fold)
+
+Use:
+
+```bash
+python in_context_classification.py \
+  --dataset arabica_coffee_leaf_disease_classification \
+  --model-type qwen_vl_3 \
+  --config configs.yaml \
+  --output-dir outputs/
+```
+
+Fold mode (task-specific folds in `splits.yaml`):
+
+```bash
+python in_context_classification.py \
+  --fold disease_fold_1 \
+  --model-type qwen_vl_3 \
+  --config configs.yaml \
+  --splits-path splits.yaml \
+  --output-dir outputs/
+```
+
+## Supported zero-shot model keys
+
+These are the keys dispatched in `zero_shot_classification.py`.
+
+### Local/Hugging Face models
+
+- `siglip2`
+- `llava_next`
+- `qwen_vl`
+- `qwen_vl_72b`
+- `qwen_vl_3`
+- `gemma_3`
+- `deepseek_vl`
+
+### API models
+
+- `gpt-5`
+- `gpt-5-nano`
+- `gemini-3-pro-preview`
+- `claude-haiku-4-5`
+
+Additional accepted dispatcher aliases:
+
+- `gemini_25_flash`
+- `claude-sonnet-4-5`
+- `claude-opus-4-5`
+
+## Setup (minimal)
+
+### Python environment
+
+```bash
+conda create -n vlm python=3.10 -y
 conda activate vlm
 
-# Install dependencies
-pip install torch torchvision transformers datasets peft
+pip install torch torchvision transformers datasets peft trl
 pip install agml pillow pyyaml scikit-learn pandas tqdm
-pip install ultralytics  # for YOLO models
+pip install ultralytics
+
+# for API runs
+pip install openai google-generativeai anthropic
 ```
 
-**For API-Based Models:**
-```bash
-# Or install individually:
-pip install openai>=1.0.0           # For OpenAI GPT-4o
-pip install google-generativeai>=0.3.0  # For Google Gemini
-pip install anthropic>=0.18.0       # For Anthropic Claude
-```
+### API keys
 
-### 2. API Keys Setup (For API Models Only)
-
-For API-based models, you need to set up API keys:
-
-**Option 1: Interactive Setup Script**
 ```bash
 bash scripts/setup_api_keys.sh
-```
-
-**Option 2: Manual Setup**
-```bash
-# Add to ~/.bashrc or export in terminal
-export OPENAI_API_KEY='your-openai-key-here'
-export GOOGLE_API_KEY='your-google-key-here'
-export ANTHROPIC_API_KEY='your-anthropic-key-here'
-
-# Apply changes
 source ~/.bashrc
 ```
 
-**Get API Keys:**
-- OpenAI: https://platform.openai.com/api-keys
-- Google Gemini: https://aistudio.google.com/app/apikey
-- Anthropic Claude: https://console.anthropic.com/settings/keys
-
----
-
-## Quick Start
-
-### HuggingFace Models (Zero-Shot)
+Or export manually:
 
 ```bash
-python zero_shot_classification.py \
-    --dataset arabica_coffee_leaf_disease_classification \
-    --model-type siglip2 \
-    --config configs.yaml \
-    --output-dir outputs/
+export OPENAI_API_KEY='...'
+export GEMINI_API_KEY='...'
+export ANTHROPIC_API_KEY='...'
 ```
 
-### API Models (Zero-Shot)
+(`GOOGLE_API_KEY` is also accepted for Gemini.)
+
+## Batch helpers
+
+### Run many datasets from `datasets.txt`
 
 ```bash
-# OpenAI GPT-4o-mini
-python zero_shot_classification.py \
-    --dataset arabica_coffee_leaf_disease_classification \
-    --model-type gpt-5 \
-    --config configs.yaml \
-    --output-dir outputs/
+bash scripts/baseline.sh zero_shot qwen_vl
 ```
 
----
-
-## Usage
-
-### Zero-Shot Classification
-
-Test pre-trained models without fine-tuning:
+### Quick API smoke test on one dataset
 
 ```bash
-python zero_shot_classification.py \
-    --dataset <dataset_name> \
-    --model-type <model_type> \
-    --config configs.yaml \
-    --output-dir outputs/
+bash scripts/test_api_models.sh \
+  --dataset bean_disease_uganda \
+  --model gpt-5-nano \
+  --plant-type bean \
+  --task disease
 ```
 
-**Arguments:**
-- `--dataset`: Name of AgML dataset (required)
-- `--model-type`: Model to use: `siglip2`, `llava_next`, `qwen_vl`, `gemma_3`
-- `--config`: Path to YAML config file (default: `configs.yaml`)
-- `--output-dir`: Output directory (default: `outputs/`)
+## LLM judge evaluation (updated)
 
-**Example:**
-```bash
-python zero_shot_classification.py \
-    --dataset corn_maize_leaf_disease \
-    --model-type siglip2 \
-    --config configs.yaml \
-    --output-dir results/
-```
+Evaluate semantic correctness (not exact string matching):
 
----
-
-### Batch Processing
-
-#### Local (Sequential Processing)
-
-Use `scripts/baseline.sh` for batch processing multiple datasets:
-
-**Zero-shot on all datasets:**
-```bash
-bash scripts/baseline.sh zero_shot siglip2
-```
-
----
-
-### LLM Judge Evaluation
-
-Evaluate predictions using an LLM judge that performs semantic label matching, accounting for synonyms and different naming conventions.
-
-#### Why Use LLM Judge?
-
-Traditional exact string matching fails when predictions and ground truth use different terminology:
-- Ground truth: `"tomato_early_blight"`
-- Prediction: `"early blight disease"`
-- Exact match: ❌ (wrong)
-- LLM Judge: ✅ (semantically correct)
-
-#### Quick Start
-
-**Option 1: OpenAI API (Fast, Paid)**
 ```bash
 python evaluate_with_judge.py outputs/qwen_vl/tomato_leaf_disease/predictions.csv
 ```
 
-**Option 2: GPT-OSS-20B (Free, Local, Open-Source)**
+Batch pattern:
+
 ```bash
-python evaluate_with_judge.py outputs/qwen_vl/tomato_leaf_disease/predictions.csv \
-    --model openai/gpt-oss-20b \
-    --provider hf \
-    --device auto
+python evaluate_with_judge.py "outputs/qwen_vl/*/predictions.csv" --threshold 1
 ```
 
-#### Batch Evaluation
+Wrapper script:
+
 ```bash
-python evaluate_with_judge.py "outputs/qwen_vl/*/predictions.csv" \
-    --model openai/gpt-oss-120b \
-    --provider hf \
-    --threshold 1
+bash scripts/run_judge.sh "outputs/qwen_vl/*/predictions.csv" \
+  --model openai/gpt-oss-20b \
+  --provider hf \
+  --threshold 1 \
+  --reasoning-level medium
 ```
 
-#### Confidence Scores
+Notes:
 
-| Score | Meaning |
-|-------|---------|
-| 0 | Very unsure / different things |
-| 1 | Could possibly be the same |
-| 2 | Very confident / clearly the same |
+- `--threshold`: `0`, `1`, or `2` (default `1`)
+- `--provider`: `openai`, `anthropic`, or `hf`
+- `scripts/run_judge.sh` accepts both `--reasoning-level` and `--reasoning`
 
-Set `--threshold 1` (recommended) or `--threshold 2` (stricter)
+## Metrics guidance
 
-#### Output Files
-- `predictions_with_judge.csv` - Original predictions + judge scores
-- `judge_metrics.json` - Summary metrics and accuracy gains
-- `judge_report.txt` - Human-readable report with examples
+- `metrics.csv` includes `accuracy`, `f1_macro`, and `f1_weighted`.
+- For fold-based cross-dataset evaluation, prioritize averaging per-dataset `f1_macro` across folds.
 
----
+## Outputs
 
-## Output Structure
+Typical structure:
 
-Results are organized by task, model, and dataset:
-
-```
+```text
 outputs/
-├── zero_shot_classification/
-│   └── siglip2/
-│       └── tomato_leaf_disease/
-│           ├── predictions.csv
-│           ├── metrics.csv
-│           ├── per_class.csv
-│           ├── dataset_metrics.csv
-│           └── confusion_matrix.csv
+  <model_type>/
+    <dataset>/
+      predictions.csv
+      metrics.csv
+      per_class.csv
+      confusion_matrix.csv
 ```
 
-### Output Files
+Judge outputs (same directory as `predictions.csv`):
 
-**predictions.csv**
-- Per-sample predictions with image paths, true labels, predicted labels, confidence scores
-- Includes full probability distribution as JSON
-
-**metrics.csv**
-- Overall accuracy, precision, recall, F1 scores (weighted and macro)
-- Total number of classes and images
-
-**per_class.csv**
-- Per-class precision, recall, F1, support
-- Used for detailed class-level analysis
-
-**dataset_metrics.csv**
-- Per-dataset aggregated metrics (for multi-dataset experiments)
-- Includes accuracy, precision, recall, F1, number of classes, total samples
-
-**confusion_matrix.csv**
-- Full confusion matrix with true vs predicted labels
-
----
+- `predictions_with_judge.csv`
+- `judge_metrics.json`
+- `judge_report.txt`
