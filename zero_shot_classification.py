@@ -71,7 +71,17 @@ def main(args):
         
         from models.gemma_3 import test
         
-        test(args.cfg, model_type="google/gemma-3-4b-it", dataset=args.dataset, output_dir=output_dir)
+        # Check config for a fine-tuned model path, otherwise use default
+        model_path = args.cfg.get('model_path', "google/gemma-3-4b-it")
+        test(args.cfg, model_type=model_path, dataset=args.dataset, output_dir=output_dir)
+
+    elif args.model_type == "gemm_4":
+        
+        from models.gemm_4 import test
+        
+        # Check config for a fine-tuned model path, otherwise use default
+        model_path = args.cfg.get('model_path', "google/gemma-4-E2B-it") # Or whichever gemma 4 variant
+        test(args.cfg, model_type=model_path, dataset=args.dataset, output_dir=output_dir)
         
     elif args.model_type == "deepseek_vl":
         

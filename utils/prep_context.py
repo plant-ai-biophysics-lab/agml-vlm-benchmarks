@@ -2,8 +2,148 @@ import json
 import os
 import random
 
+from pathlib import Path
 from typing import Optional
+
+import yaml
+
 from tasks.classification import load_agml_dataset
+
+
+TASK_ALIAS_MAP = {
+    "disease": "disease",
+    "pest_damage": "pest_damage",
+    "pest/damage": "pest_damage",
+    "pest damage": "pest_damage",
+    "plant_weed": "plant_weed",
+    "crops/weeds": "plant_weed",
+    "crops_weeds": "plant_weed",
+    "plant weed": "plant_weed",
+}
+
+CANONICAL_TASK_ORDER = ["disease", "pest_damage", "plant_weed"]
+
+
+def _normalize_dataset_name(name: str) -> str:
+    base = Path(name).name.rstrip("/")
+    base = base.replace("\\", "/").split("/")[-1]
+    # strip common suffixes created during preprocessing
+    for suffix in ("_split", "_combined"):
+        if base.endswith(suffix):
+            base = base[: -len(suffix)]
+    return base.lower()
+
+
+def _load_context_yaml(context_file: str) -> dict:
+    if not os.path.exists(context_file):
+        return {}
+    with open(context_file, "r") as f:
+        data = yaml.safe_load(f) or {}
+    return data
+
+
+def _load_dataset_spec(datasets_file: str) -> dict:
+    """Parse datasets.txt into a mapping of dataset -> metadata."""
+    dataset_map: dict[str, dict] = {}
+    if not os.path.exists(datasets_file):
+        return dataset_map
+
+    with open(datasets_file, "r") as f:
+        for raw_line in f:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) < 3:
+                continue
+            dataset_name, plant_type, task = parts[:3]
+            dataset_map[_normalize_dataset_name(dataset_name)] = {
+                "dataset": dataset_name,
+                "plant_type": plant_type,
+                "task": task,
+            }
+    return dataset_map
+
+
+def _is_task_key(key: str) -> bool:
+    return _normalize_task_key(key) is not None
+
+
+def _normalize_task_key(key: Optional[str]) -> Optional[str]:
+    if key is None:
+        return None
+    norm = key.strip().lower().replace("-", "_").replace("/", "_").replace(" ", "_")
+    return TASK_ALIAS_MAP.get(norm)
+
+
+def build_prompt_descriptions(
+    dataset_name: Optional[str],
+    use_desc: bool,
+    *,
+    datasets_file: str = "datasets.txt",
+    context_file: str = "context.yaml",
+) -> tuple[list[dict], list[str]]:
+    """Build text blocks for task and dataset context.
+
+    Returns (blocks, warnings). Blocks can be prepended to the chat content.
+    """
+    if not use_desc:
+        return [], []
+
+    warnings: list[str] = []
+    blocks: list[dict] = []
+
+    context_data = _load_context_yaml(context_file)
+    dataset_spec = _load_dataset_spec(datasets_file)
+
+    if not context_data:
+        warnings.append(f"context file not found or empty: {context_file}")
+        return [], warnings
+
+    # task contexts: prefer a single aggregated key if present
+    task_block = context_data.get("task_context")
+    if task_block:
+        blocks.append({"type": "text", "text": f"Task context:\n{task_block}"})
+    else:
+        task_lines: list[str] = []
+        for task_key in CANONICAL_TASK_ORDER:
+            desc = context_data.get(task_key)
+            if desc:
+                label = task_key.replace("_", " ")
+                task_lines.append(f"- {label}: {desc}")
+            else:
+                warnings.append(f"Task context '{task_key}' not found in {context_file}")
+        if task_lines:
+            blocks.append({"type": "text", "text": "Task context:\n" + "\n".join(task_lines)})
+
+    # dataset context
+    if dataset_name:
+        normalized_dataset = _normalize_dataset_name(dataset_name)
+        dataset_in_file = dataset_spec.get(normalized_dataset)
+        if not dataset_in_file:
+            warnings.append(
+                f"Dataset '{dataset_name}' not listed in {datasets_file}; using name as-is for context lookup"
+            )
+
+        dataset_contexts = {
+            _normalize_dataset_name(k): v
+            for k, v in context_data.items()
+            if not _is_task_key(k)
+        }
+        dataset_desc = dataset_contexts.get(normalized_dataset)
+        if dataset_desc:
+            blocks.append(
+                {
+                    "type": "text",
+                    "text": f"Dataset context ({dataset_name}): {dataset_desc}",
+                }
+            )
+        else:
+            warnings.append(
+                f"Dataset context for '{dataset_name}' not found in {context_file} (normalized key: {normalized_dataset})"
+            )
+
+    return blocks, warnings
 
 def get_context(dataset: str, num_examples_per_class: int = 1, seed: int = 42) -> dict[str, list[str]]:
     """Get context examples from the training set.
@@ -67,7 +207,7 @@ def get_context(dataset: str, num_examples_per_class: int = 1, seed: int = 42) -
     return context_examples
 
 def create_classification_message(
-    task: str,
+    task: Optional[str],
     template: str,
     query_image_path: str,
     context_examples: dict[str, list[str]],
@@ -76,7 +216,8 @@ def create_classification_message(
     include_correct_class: bool = True,
     random_pool: bool = False,
     output_path: Optional[str] = None,
-    random_seed: int = 42
+    random_seed: int = 42,
+    prepend_text: Optional[list[dict]] = None,
 ) -> tuple[dict, dict]:
     """Build a classification message with in-context examples.
 
@@ -95,12 +236,15 @@ def create_classification_message(
             - num_context_classes: number of classes included as context
             - num_context_examples: total number of context images included
     """
-    content = [
+    content: list[dict] = []
+    if prepend_text:
+        content.extend(prepend_text)
+    content.append(
         {
             "type": "text",
             "text": "Here are image and label examples of disease, pest, damage, or other stresses:",
         }
-    ]
+    )
     
     # filter / sample context
     use_all = max_num_class_context == "max" or max_num_class_context is None
