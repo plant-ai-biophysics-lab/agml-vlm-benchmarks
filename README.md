@@ -86,11 +86,11 @@ uv sync
 
 This creates a `.venv` in the project directory and installs everything from `pyproject.toml`. On Linux it pulls a CUDA-enabled torch build; on macOS it falls back to CPU.
 
-**If your cluster runs CUDA 11.8 instead of 12.1**, change the index URL in `pyproject.toml` before syncing:
+**If your cluster runs a different CUDA version**, change the index URL in `pyproject.toml` before syncing — e.g. `cu121` for CUDA 12.1, `cu118` for CUDA 11.8:
 
 ```toml
 # pyproject.toml
-url = "https://download.pytorch.org/whl/cu118"
+url = "https://download.pytorch.org/whl/cu121"
 ```
 
 Check your CUDA version with `nvidia-smi`.
