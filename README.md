@@ -76,13 +76,32 @@ Additional accepted dispatcher aliases:
 conda create -n vlm python=3.10 -y
 conda activate vlm
 
-pip install torch torchvision transformers datasets peft trl
+pip install torch torchvision transformers datasets
 pip install agml pillow pyyaml scikit-learn pandas tqdm
 pip install ultralytics
+
+# vLLM (used for all local HF model inference)
+pip install vllm
 
 # for API runs
 pip install openai google-generativeai anthropic
 ```
+
+### vLLM notes
+
+All local HF models (`qwen_vl`, `qwen_vl_3`, `qwen_vl_72b`, `llava_next`, `gemma_3`, `deepseek_vl`) now run through `models/vllm_vlm.py` instead of raw transformers. vLLM builds all conversations up front and runs inference in a single batched pass, which is significantly faster than the loop-based transformers approach.
+
+Key config options (per model in `configs.yaml`):
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `tensor_parallel_size` | `1` | Number of GPUs for tensor parallelism (set to 4 for 72B) |
+| `gpu_memory_utilization` | `0.90` | Fraction of GPU memory vLLM may use |
+| `max_model_len` | `null` | Override max sequence length (useful to reduce memory) |
+| `max_images_per_prompt` | `20` | Cap on images per prompt (only matters for in-context runs) |
+| `min_pixels` / `max_pixels` | model default | Pixel constraints forwarded to the vision processor |
+
+`siglip2` and all API-backed models are unaffected.
 
 ### API keys
 
@@ -107,6 +126,7 @@ export ANTHROPIC_API_KEY='...'
 
 ```bash
 bash scripts/baseline.sh zero_shot qwen_vl
+bash scripts/baseline.sh in_context qwen_vl_3
 ```
 
 ### Quick API smoke test on one dataset

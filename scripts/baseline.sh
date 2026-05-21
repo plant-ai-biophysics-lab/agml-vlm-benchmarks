@@ -24,17 +24,14 @@ echo "======================================"
 echo ""
 
 # Determine which script to run
-if [ "$MODE" = "fine_tune" ]; then
-    SCRIPT="$REPO_ROOT/fine_tune_classification.py"
-    echo "Running fine-tune classification"
-elif [ "$MODE" = "zero_shot" ]; then
+if [ "$MODE" = "zero_shot" ]; then
     SCRIPT="$REPO_ROOT/zero_shot_classification.py"
     echo "Running zero-shot classification"
 elif [ "$MODE" = "in_context" ]; then
     SCRIPT="$REPO_ROOT/in_context_classification.py"
     echo "Running in-context classification"
 else
-    echo "ERROR: Invalid mode '$MODE'. Must be 'zero_shot', 'fine_tune', or 'in_context'"
+    echo "ERROR: Invalid mode '$MODE'. Must be 'zero_shot' or 'in_context'"
     exit 1
 fi
 echo ""

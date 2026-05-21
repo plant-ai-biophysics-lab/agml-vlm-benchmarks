@@ -14,11 +14,15 @@ def _dispatch_model(args, dataset, output_dir, context, max_num_context, include
         test(args.cfg, model_type="google/siglip2-base-patch16-naflex", dataset=dataset, output_dir=output_dir)
 
     elif args.model_type == "llava_next":
-        from models.llava_next import test
-        test(args.cfg, model_type="llava-hf/llama3-llava-next-8b-hf", dataset=dataset, output_dir=output_dir)
+        from models.vllm_vlm import test
+        test(
+            args.cfg, model_type="llava-hf/llama3-llava-next-8b-hf", dataset=dataset, output_dir=output_dir,
+            context=context, max_num_class_context=max_num_context,
+            include_correct_class=include_correct_class, random_pool=random_pool,
+        )
 
     elif args.model_type == "qwen_vl":
-        from models.qwen_vl import test
+        from models.vllm_vlm import test
         test(
             args.cfg, model_type="Qwen/Qwen2.5-VL-7B-Instruct", dataset=dataset, output_dir=output_dir,
             context=context, max_num_class_context=max_num_context,
@@ -26,11 +30,15 @@ def _dispatch_model(args, dataset, output_dir, context, max_num_context, include
         )
 
     elif args.model_type == "qwen_vl_72b":
-        from models.qwen_vl import test
-        test(args.cfg, model_type="Qwen/Qwen2.5-VL-72B-Instruct", dataset=dataset, output_dir=output_dir)
+        from models.vllm_vlm import test
+        test(
+            args.cfg, model_type="Qwen/Qwen2.5-VL-72B-Instruct", dataset=dataset, output_dir=output_dir,
+            context=context, max_num_class_context=max_num_context,
+            include_correct_class=include_correct_class, random_pool=random_pool,
+        )
 
     elif args.model_type == "qwen_vl_3":
-        from models.qwen_vl import test
+        from models.vllm_vlm import test
         test(
             args.cfg, model_type="Qwen/Qwen3-VL-8B-Instruct", dataset=dataset, output_dir=output_dir,
             context=context, max_num_class_context=max_num_context,
@@ -38,12 +46,20 @@ def _dispatch_model(args, dataset, output_dir, context, max_num_context, include
         )
 
     elif args.model_type == "gemma_3":
-        from models.gemma_3 import test
-        test(args.cfg, model_type="google/gemma-3-4b-it", dataset=dataset, output_dir=output_dir)
+        from models.vllm_vlm import test
+        test(
+            args.cfg, model_type="google/gemma-3-4b-it", dataset=dataset, output_dir=output_dir,
+            context=context, max_num_class_context=max_num_context,
+            include_correct_class=include_correct_class, random_pool=random_pool,
+        )
 
     elif args.model_type == "deepseek_vl":
-        from models.deepseekvl_7b import test
-        test(args.cfg, model_type="deepseek-ai/deepseek-vl-7b-chat", dataset=dataset, output_dir=output_dir)
+        from models.vllm_vlm import test
+        test(
+            args.cfg, model_type="deepseek-ai/deepseek-vl-7b-chat", dataset=dataset, output_dir=output_dir,
+            context=context, max_num_class_context=max_num_context,
+            include_correct_class=include_correct_class, random_pool=random_pool,
+        )
 
     elif args.model_type == "gpt-5-nano":
         from models.api_vlms import test_openai

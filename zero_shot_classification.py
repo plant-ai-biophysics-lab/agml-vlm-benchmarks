@@ -38,55 +38,53 @@ def main(args):
                 print(f"Using prompt with task: {format_dict['task']}")
     
     if args.model_type == "siglip2":
-        
+
         from models.siglip2 import test
-        
+
         test(args.cfg, model_type="google/siglip2-base-patch16-naflex", dataset=args.dataset, output_dir=output_dir)
-        
+
     elif args.model_type == "llava_next":
-        
-        from models.llava_next import test
-        
+
+        from models.vllm_vlm import test
+
         test(args.cfg, model_type="llava-hf/llama3-llava-next-8b-hf", dataset=args.dataset, output_dir=output_dir)
-    
+
     elif args.model_type == "qwen_vl":
-        
-        from models.qwen_vl import test
-        
+
+        from models.vllm_vlm import test
+
         test(args.cfg, model_type="Qwen/Qwen2.5-VL-7B-Instruct", dataset=args.dataset, output_dir=output_dir)
-        
+
     elif args.model_type == "qwen_vl_72b":
-        
-        from models.qwen_vl import test
-        
+
+        from models.vllm_vlm import test
+
         test(args.cfg, model_type="Qwen/Qwen2.5-VL-72B-Instruct", dataset=args.dataset, output_dir=output_dir)
-        
+
     elif args.model_type == "qwen_vl_3":
-        
-        from models.qwen_vl import test
-        
+
+        from models.vllm_vlm import test
+
         test(args.cfg, model_type="Qwen/Qwen3-VL-8B-Instruct", dataset=args.dataset, output_dir=output_dir)
-        
+
     elif args.model_type == "gemma_3":
-        
-        from models.gemma_3 import test
-        
-        # Check config for a fine-tuned model path, otherwise use default
-        model_path = args.cfg.get('model_path', "google/gemma-3-4b-it")
+
+        from models.vllm_vlm import test
+
+        model_path = args.cfg.get("model_path", "google/gemma-3-4b-it")
         test(args.cfg, model_type=model_path, dataset=args.dataset, output_dir=output_dir)
 
     elif args.model_type == "gemm_4":
-        
-        from models.gemm_4 import test
-        
-        # Check config for a fine-tuned model path, otherwise use default
-        model_path = args.cfg.get('model_path', "google/gemma-4-E2B-it") # Or whichever gemma 4 variant
+
+        from models.vllm_vlm import test
+
+        model_path = args.cfg.get("model_path", "google/gemma-4-E2B-it")
         test(args.cfg, model_type=model_path, dataset=args.dataset, output_dir=output_dir)
-        
+
     elif args.model_type == "deepseek_vl":
-        
-        from models.deepseekvl_7b import test
-        
+
+        from models.vllm_vlm import test
+
         test(args.cfg, model_type="deepseek-ai/deepseek-vl-7b-chat", dataset=args.dataset, output_dir=output_dir)
 
     elif args.model_type == "gpt-5-nano":
