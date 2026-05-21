@@ -5,7 +5,7 @@ description = "Evaluating vision-language models on AgML agricultural classifica
 requires-python = ">=3.10"
 dependencies = [
     # inference
-    "vllm",
+    "vllm>=0.6.0",
     "torch",
     "transformers",
 
