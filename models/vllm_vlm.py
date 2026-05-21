@@ -4,6 +4,28 @@ from typing import Optional
 from tqdm import tqdm
 from vllm import LLM, SamplingParams
 
+# Qwen2.5-VL config.json has both legacy 'type=mrope' and modern 'rope_type=default',
+# which some vLLM versions reject as a conflict. Patch the validator to reconcile them
+# by promoting the legacy 'type' value into 'rope_type' before the check runs.
+try:
+    import vllm.transformers_utils.config as _vllm_cfg
+
+    _orig_patch = _vllm_cfg.patch_rope_scaling_dict
+
+    def _patched_patch_rope_scaling_dict(rope_scaling: dict) -> None:
+        if (
+            isinstance(rope_scaling, dict)
+            and "type" in rope_scaling
+            and "rope_type" in rope_scaling
+            and rope_scaling["type"] != rope_scaling["rope_type"]
+        ):
+            rope_scaling["rope_type"] = rope_scaling["type"]
+        _orig_patch(rope_scaling)
+
+    _vllm_cfg.patch_rope_scaling_dict = _patched_patch_rope_scaling_dict
+except Exception:
+    pass
+
 from tasks.classification import load_agml_dataset, agml_to_df
 from utils.prep_context import create_classification_message, build_prompt_descriptions
 from utils.utils import save_classification_results, fuzzy_match_label
