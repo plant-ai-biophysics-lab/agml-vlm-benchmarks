@@ -155,10 +155,13 @@ def test(
         dataset_path = dataset
     df = agml_to_df(os.path.join(dataset_path, "val"))
     
-    # if sample limit is set, take a subset
+    # if sample limit is set, take a stratified subset
     sample_limit = args.get("sample_limit", None)  # Default to full dataset
     if sample_limit and 0 < sample_limit < 1:
-        df = df.sample(frac=sample_limit, random_state=42).reset_index(drop=True)
+        # Group by label to maintain class distribution, then sample. The second sample shuffles the result.
+        df = df.groupby('label', group_keys=False).apply(
+            lambda x: x.sample(frac=sample_limit, random_state=int(os.environ.get("RANDOM_SEED", 42)))
+        ).sample(frac=1, random_state=int(os.environ.get("RANDOM_SEED", 42))).reset_index(drop=True)
     
     # prepare data
     class_names = sorted(df["label"].unique().tolist())

@@ -216,7 +216,7 @@ def create_classification_message(
     include_correct_class: bool = True,
     random_pool: bool = False,
     output_path: Optional[str] = None,
-    random_seed: int = 42,
+    random_seed: int = int(__import__("os").environ.get("RANDOM_SEED", 42)),
     prepend_text: Optional[list[dict]] = None,
 ) -> tuple[dict, dict]:
     """Build a classification message with in-context examples.

@@ -72,7 +72,7 @@ def train(args: dict, model_type: str, dataset: str | dict, output_dir: str):
         format_data(sample["image"], conversation_template, id2label[sample["label"]]) for sample in train_ds
     ]
 
-    torch_dtype = args.get("dtype", torch.bfloat16)
+    torch_dtype_str = args.get("dtype", "bfloat16"); torch_dtype = getattr(torch, torch_dtype_str) if isinstance(torch_dtype_str, str) else torch_dtype_str
     model = AutoModelForImageTextToText.from_pretrained(
         model_type,
         torch_dtype=torch_dtype,
@@ -127,7 +127,7 @@ def test(
 
     sample_limit = args.get("sample_limit", None)
     if sample_limit and 0 < sample_limit < 1:
-        df = df.sample(frac=sample_limit, random_state=42).reset_index(drop=True)
+        df = df.sample(frac=sample_limit, random_state=int(os.environ.get("RANDOM_SEED", 42))).reset_index(drop=True)
 
     class_names = sorted(df["label"].unique().tolist())
     candidate_labels = class_names
@@ -169,7 +169,7 @@ def test(
     print(f"Using model {model_type} for testing")
     print_gpu_utilization()
 
-    torch_dtype = args.get("dtype", torch.bfloat16)
+    torch_dtype_str = args.get("dtype", "bfloat16"); torch_dtype = getattr(torch, torch_dtype_str) if isinstance(torch_dtype_str, str) else torch_dtype_str
     model = AutoModelForImageTextToText.from_pretrained(
         model_type,
         torch_dtype=torch_dtype,

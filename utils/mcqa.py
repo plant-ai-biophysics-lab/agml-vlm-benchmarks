@@ -9,7 +9,7 @@ import random
 from typing import List, Tuple
 
 # Set random seed for reproducibility
-RANDOM_SEED = 42
+import os; RANDOM_SEED = int(os.environ.get("RANDOM_SEED", 42))
 
 
 def get_mcqa_choices(
