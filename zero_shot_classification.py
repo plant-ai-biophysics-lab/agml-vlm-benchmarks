@@ -59,7 +59,7 @@ def main(args):
 
         from models.vllm_vlm import test
 
-        test(args.cfg, model_type="Qwen/Qwen2.5-VL-72B-Instruct", dataset=args.dataset, output_dir=output_dir)
+        test(args.cfg, model_type="Qwen/Qwen2.5-VL-72B-Instruct-AWQ", dataset=args.dataset, output_dir=output_dir)
 
     elif args.model_type == "qwen_vl_3":
 

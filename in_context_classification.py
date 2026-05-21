@@ -32,7 +32,7 @@ def _dispatch_model(args, dataset, output_dir, context, max_num_context, include
     elif args.model_type == "qwen_vl_72b":
         from models.vllm_vlm import test
         test(
-            args.cfg, model_type="Qwen/Qwen2.5-VL-72B-Instruct", dataset=dataset, output_dir=output_dir,
+            args.cfg, model_type="Qwen/Qwen2.5-VL-72B-Instruct-AWQ", dataset=dataset, output_dir=output_dir,
             context=context, max_num_class_context=max_num_context,
             include_correct_class=include_correct_class, random_pool=random_pool,
         )
