@@ -1,0 +1,59 @@
+[project]
+name = "agml-vlm-benchmarks"
+version = "0.1.0"
+description = "Evaluating vision-language models on AgML agricultural classification datasets"
+requires-python = ">=3.10"
+dependencies = [
+    # inference
+    "vllm",
+    "torch",
+    "transformers",
+
+    # data / agml
+    "agml",
+    "pillow",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+
+    # config / utils
+    "pyyaml",
+    "tqdm",
+    "pynvml",
+
+    # object detection baseline
+    "ultralytics",
+
+    # analysis scripts
+    "matplotlib",
+
+    # api models
+    "openai",
+    "google-generativeai",
+    "anthropic",
+]
+
+# ---------------------------------------------------------------------------
+# uv: pull torch from the PyTorch CUDA index on Linux (the cluster),
+# fall back to CPU wheel on macOS (local dev).
+# Change cu121 -> cu118 or cu124 to match your cluster's CUDA version.
+# ---------------------------------------------------------------------------
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cuda", marker = "sys_platform == 'linux'" },
+    { index = "pytorch-cpu",  marker = "sys_platform == 'darwin'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cuda"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv]
+# Allow packages to be resolved across multiple indices
+index-strategy = "unsafe-best-match"

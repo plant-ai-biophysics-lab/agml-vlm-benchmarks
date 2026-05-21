@@ -68,23 +68,39 @@ Additional accepted dispatcher aliases:
 - `claude-sonnet-4-5`
 - `claude-opus-4-5`
 
-## Setup (minimal)
+## Setup
 
-### Python environment
+### Python environment (uv)
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) if you don't have it:
 
 ```bash
-conda create -n vlm python=3.10 -y
-conda activate vlm
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-pip install torch torchvision transformers datasets
-pip install agml pillow pyyaml scikit-learn pandas tqdm
-pip install ultralytics
+Then sync the project:
 
-# vLLM (used for all local HF model inference)
-pip install vllm
+```bash
+uv sync
+```
 
-# for API runs
-pip install openai google-generativeai anthropic
+This creates a `.venv` in the project directory and installs everything from `pyproject.toml`. On Linux it pulls a CUDA-enabled torch build; on macOS it falls back to CPU.
+
+**If your cluster runs CUDA 11.8 instead of 12.1**, change the index URL in `pyproject.toml` before syncing:
+
+```toml
+# pyproject.toml
+url = "https://download.pytorch.org/whl/cu118"
+```
+
+Check your CUDA version with `nvidia-smi`.
+
+To run scripts inside the environment:
+
+```bash
+uv run python zero_shot_classification.py ...
+# or activate the venv directly
+source .venv/bin/activate
 ```
 
 ### vLLM notes
