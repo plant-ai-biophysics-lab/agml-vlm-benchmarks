@@ -63,6 +63,7 @@ qwen_vl_72b:
   batch_size: 1
   tensor_parallel_size: 1
   gpu_memory_utilization: 0.90
+  max_model_len: 8192
 
   # prompt_template: "What is shown in this image? Choose one: {classes}. Answer with only the class name."
   # prompt_template: "Classify this image into one of the following categories: {classes}. Respond with ONLY the category name, nothing else."
