@@ -123,6 +123,7 @@ def test(
         llm_kwargs["max_model_len"] = args["max_model_len"]
     if args.get("enforce_eager"):
         llm_kwargs["enforce_eager"] = True
+    llm_kwargs["allowed_local_media_path"] = args.get("allowed_local_media_path", "/")
 
     # Pass pixel constraints through to the vision processor (Qwen VL, etc.)
     mm_processor_kwargs = {}
