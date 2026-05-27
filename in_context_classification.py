@@ -160,13 +160,15 @@ def main(args):
         _, test_datasets = load_fold_split(args.fold, "val", args.splits_path)
         print(f"Fold '{args.fold}': testing on {len(test_datasets)} val datasets: {test_datasets}")
 
+        seed_tag = os.environ.get("RANDOM_SEED", "42")
         for dataset in test_datasets:
-            fold_output_dir = os.path.join(args.output_dir, args.model_type, args.fold, dataset)
+            fold_output_dir = os.path.join(args.output_dir, args.model_type, f"seed_{seed_tag}", args.fold, dataset)
             print(f"\n--- [{args.fold}] Running on val dataset: {dataset} ---")
             _dispatch_model(args, dataset, fold_output_dir, context, max_num_context, include_correct_class, random_pool)
 
     else:
-        output_dir = os.path.join(args.output_dir, args.model_type, args.dataset)
+        seed_tag = os.environ.get("RANDOM_SEED", "42")
+        output_dir = os.path.join(args.output_dir, args.model_type, f"seed_{seed_tag}", args.dataset)
         context = get_context(args.dataset, num_examples_per_class=max_num_example)
         _dispatch_model(args, args.dataset, output_dir, context, max_num_context, include_correct_class, random_pool)
 

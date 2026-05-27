@@ -71,9 +71,11 @@ def test(
     sample_limit = args.get("sample_limit", None)
     if sample_limit and 0 < sample_limit < 1:
         seed = int(args.get("random_seed", os.environ.get("RANDOM_SEED", 42)))
+        print(f"Sample limit: {sample_limit} | Seed: {seed} | Full dataset size: {len(df)}")
         df = df.groupby("label", group_keys=False).apply(
             lambda x: x.sample(frac=sample_limit, random_state=seed)
         ).sample(frac=1, random_state=seed).reset_index(drop=True)
+        print(f"Subsampled dataset size: {len(df)}")
 
     class_names = sorted(df["label"].unique().tolist())
     candidate_labels = class_names
