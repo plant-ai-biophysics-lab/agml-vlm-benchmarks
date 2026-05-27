@@ -93,6 +93,8 @@ def _dispatch_model(args, dataset, output_dir, context, max_num_context, include
 
 
 def main(args):
+    args.cfg["random_seed"] = args.random_seed
+
     # Validate required args
     if not args.fold and not args.dataset:
         raise ValueError("Either --dataset or --fold must be specified.")
@@ -160,14 +162,14 @@ def main(args):
         _, test_datasets = load_fold_split(args.fold, "val", args.splits_path)
         print(f"Fold '{args.fold}': testing on {len(test_datasets)} val datasets: {test_datasets}")
 
-        seed_tag = os.environ.get("RANDOM_SEED", "42")
+        seed_tag = str(args.random_seed)
         for dataset in test_datasets:
             fold_output_dir = os.path.join(args.output_dir, args.model_type, f"seed_{seed_tag}", args.fold, dataset)
             print(f"\n--- [{args.fold}] Running on val dataset: {dataset} ---")
             _dispatch_model(args, dataset, fold_output_dir, context, max_num_context, include_correct_class, random_pool)
 
     else:
-        seed_tag = os.environ.get("RANDOM_SEED", "42")
+        seed_tag = str(args.random_seed)
         output_dir = os.path.join(args.output_dir, args.model_type, f"seed_{seed_tag}", args.dataset)
         context = get_context(args.dataset, num_examples_per_class=max_num_example)
         _dispatch_model(args, args.dataset, output_dir, context, max_num_context, include_correct_class, random_pool)
@@ -218,6 +220,9 @@ if __name__ == "__main__":
         type=str,
         default="splits.yaml",
         help="Path to the splits YAML file (default: splits.yaml).",
+    )
+    parser.add_argument(
+        "--random-seed", type=int, default=42, help="Random seed for subsampling."
     )
 
     args = parser.parse_args()

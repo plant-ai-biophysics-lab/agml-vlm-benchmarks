@@ -5,8 +5,9 @@ import os
 from tasks.classification import is_dataset_avail
 
 def main(args):
-    
-    seed_tag = os.environ.get("RANDOM_SEED", "42")
+
+    seed_tag = str(args.random_seed)
+    args.cfg["random_seed"] = args.random_seed
     output_dir = os.path.join(args.output_dir, args.model_type, f"seed_{seed_tag}", args.dataset)
     
     if not is_dataset_avail(args.dataset):
@@ -140,6 +141,7 @@ if __name__ == "__main__":
     parser.add_argument("--model-type", type=str, default="yolo", help="Type of model to use.")
     parser.add_argument("--config", type=str, default="configs.yaml", help="Path to YAML configuration file.")
     parser.add_argument("--output-dir", type=str, default="outputs/", help="Directory to save outputs.")
+    parser.add_argument("--random-seed", type=int, default=42, help="Random seed for subsampling.")
     
     args = parser.parse_args()
     
