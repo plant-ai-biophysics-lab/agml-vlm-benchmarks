@@ -133,17 +133,25 @@ def analyze_fps(df: pd.DataFrame) -> dict:
     n_fp_fuzzy = (df["match_type"] == "fp_fuzzy").sum()
     n_fp_total = n_fp_containment + n_fp_fuzzy
 
+    n_model_errors = total - n_correct - n_no_match  # wrong but matched
+    # Threshold-induced FP rate: wrong predictions caused by the 0.6 threshold
+    # being too permissive (excludes containment matches, which are model errors
+    # where the matcher correctly identified the class the model named)
+    threshold_fp_rate = round(n_fp_fuzzy / total, 4) if total else 0
+
     return {
         "total_samples": total,
         "correct": int(n_correct),
         "accuracy": round(n_correct / total, 4) if total else 0,
         "no_match": int(n_no_match),
+        "model_errors": int(n_model_errors),
+        "model_error_rate": round(n_model_errors / total, 4) if total else 0,
         "fp_containment": int(n_fp_containment),
         "fp_fuzzy": int(n_fp_fuzzy),
         "fp_total": int(n_fp_total),
-        "fp_rate": round(n_fp_total / total, 4) if total else 0,
+        "threshold_fp_rate": threshold_fp_rate,
         "fp_containment_pct_of_errors": round(
-            n_fp_containment / max(total - n_correct, 1), 4
+            n_fp_containment / max(n_model_errors, 1), 4
         ),
         "df_with_types": df,
     }
@@ -160,10 +168,18 @@ def print_report(result: dict, df_all: pd.DataFrame):
     print(f"Total samples analysed : {result['total_samples']:,}")
     print(f"Correct predictions    : {result['correct']:,}  ({result['accuracy']*100:.1f}%)")
     print(f"No match (below 0.6)   : {result['no_match']:,}")
-    print(f"False positives total  : {result['fp_total']:,}  ({result['fp_rate']*100:.2f}%)")
-    print(f"  └─ containment FPs   : {result['fp_containment']:,}  "
-          f"({result['fp_containment_pct_of_errors']*100:.1f}% of all errors)")
-    print(f"  └─ fuzzy (0.6–1.0) FPs : {result['fp_fuzzy']:,}")
+    print()
+    print(f"Model error rate       : {result['model_error_rate']*100:.2f}%  "
+          f"({result['model_errors']:,} wrong predictions matched to some class)")
+    print(f"  └─ matched via containment : {result['fp_containment']:,}  "
+          f"({result['fp_containment_pct_of_errors']*100:.1f}% of model errors)")
+    print(f"     [model named the wrong class; matcher correctly identified it]")
+    print(f"  └─ matched via fuzzy 0.6–1.0: {result['fp_fuzzy']:,}")
+    print(f"     [ambiguous output pushed over threshold → potential threshold FPs]")
+    print()
+    print(f"Threshold FP rate      : {result['threshold_fp_rate']*100:.2f}%  "
+          f"({result['fp_fuzzy']:,} / {result['total_samples']:,})")
+    print(f"  [predictions wrong due to the 0.6 threshold being too permissive]")
 
     df_typed = result["df_with_types"]
 
