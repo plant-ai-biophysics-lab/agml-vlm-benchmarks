@@ -285,8 +285,53 @@ def save_run(out_dir: Path, results: pd.DataFrame, meta: dict):
     return acc
 
 
-def judge_oeq(out_dir: Path, judge_model: str, judge_provider: str):
-    """Run the LLM judge on an OEQ predictions.csv (writes judge_metrics.json)."""
+def purge_judging(ablation_dir: Path):
+    """Delete all judge outputs under Experiment C so every OEQ run gets rejudged
+    from scratch with a single, consistent judge model (predictions.csv is left
+    untouched — only judge_metrics.json / predictions_with_judge.csv /
+    judge_report.txt are removed).
+    """
+    c_dir = ablation_dir / "C"
+    if not c_dir.exists():
+        print("No Experiment C directory found; nothing to purge.", flush=True)
+        return
+    removed = 0
+    for cond_dir in c_dir.glob("oeq_*"):
+        for name in ("judge_metrics.json", "predictions_with_judge.csv", "judge_report.txt"):
+            for f in cond_dir.rglob(name):
+                f.unlink()
+                removed += 1
+    print(f"Purged {removed} judge output file(s) under {c_dir}.", flush=True)
+
+
+def find_pending_oeq_dirs(ablation_dir: Path) -> list:
+    """OEQ run dirs (Experiment C) that have predictions but no judge_metrics.json yet."""
+    pending = []
+    c_dir = ablation_dir / "C"
+    if not c_dir.exists():
+        return pending
+    for cond_dir in c_dir.glob("oeq_*"):
+        for preds in cond_dir.rglob("predictions.csv"):
+            run_dir = preds.parent
+            if not (run_dir / "judge_metrics.json").exists():
+                pending.append(run_dir)
+    return sorted(pending)
+
+
+def run_judging_pass(ablation_dir: Path, judge_model: str, judge_provider: str):
+    """Load the judge ONCE and score every pending OEQ run (Experiment C).
+
+    Deliberately separate from generation: for --provider hf this loads a local
+    model onto the GPU, which must not run concurrently with a live vLLM engine.
+    Call this only after all vLLM engines have been freed.
+    """
+    pending = find_pending_oeq_dirs(ablation_dir)
+    if not pending:
+        print("No pending OEQ runs to judge.", flush=True)
+        return
+
+    print(f"\n===== Judging pass: {len(pending)} pending OEQ run(s) "
+          f"(model={judge_model}, provider={judge_provider}) =====", flush=True)
     from utils.llm_judge import LLMJudge
     judge = LLMJudge(
         model_name=judge_model,
@@ -294,11 +339,17 @@ def judge_oeq(out_dir: Path, judge_model: str, judge_provider: str):
         confidence_threshold=1,
         max_workers=10,
     )
-    judge.evaluate_predictions(
-        predictions_csv=str(out_dir / "predictions.csv"),
-        output_dir=str(out_dir),
-        skip_completed=True,
-    )
+    for i, run_dir in enumerate(pending, 1):
+        print(f"[judge {i}/{len(pending)}] {run_dir.relative_to(ablation_dir)}", flush=True)
+        try:
+            judge.evaluate_predictions(
+                predictions_csv=str(run_dir / "predictions.csv"),
+                output_dir=str(run_dir),
+                skip_completed=True,
+            )
+        except Exception as e:
+            print(f"       ERROR judging {run_dir}: {e}", flush=True)
+            continue
 
 
 # ---------------------------------------------------------------------------
@@ -354,9 +405,13 @@ def experiment_B(llm, sampling, model, datasets, df_cache):
             print(f"       -> fuzzy_acc={acc:.4f} (n={len(res)})", flush=True)
 
 
-def experiment_C(llm, sampling, model, meta_by_ds, sci_names, datasets,
-                 df_cache, do_judge, judge_model, judge_provider):
-    """Common vs scientific plant_type, for MCQA-3 and OEQ. Class labels unchanged."""
+def experiment_C(llm, sampling, model, meta_by_ds, sci_names, datasets, df_cache):
+    """Common vs scientific plant_type, for MCQA-3 and OEQ. Class labels unchanged.
+
+    Generation only — OEQ judging is a separate deferred pass (see
+    run_judging_pass) so a local judge model never shares the GPU with a live
+    vLLM engine, and the judge model is loaded once instead of per-run.
+    """
     for ds in datasets:
         meta = meta_by_ds[ds]
         common = meta["plant_type"]
@@ -372,8 +427,7 @@ def experiment_C(llm, sampling, model, meta_by_ds, sci_names, datasets,
             for name_kind, plant_value in (("common", common), ("scientific", sci)):
                 cond = f"{arm}_{name_kind}"
                 out_dir = run_dir("C", cond, model, ds)
-                expect_judge = (arm == "oeq" and do_judge)
-                if is_complete(out_dir, expect_judge=expect_judge):
+                if is_complete(out_dir):
                     print(f"[skip] C/{cond}/{model}/{ds}", flush=True)
                     continue
                 print(f"[run ] C/{cond}/{model}/{ds}  plant_type='{plant_value}'", flush=True)
@@ -392,9 +446,6 @@ def experiment_C(llm, sampling, model, meta_by_ds, sci_names, datasets,
                     "plant_type": plant_value,
                 })
                 print(f"       -> fuzzy_acc={acc:.4f} (n={len(res)})", flush=True)
-                if expect_judge:
-                    print(f"       judging OEQ ...", flush=True)
-                    judge_oeq(out_dir, judge_model, judge_provider)
 
 
 # ---------------------------------------------------------------------------
@@ -413,12 +464,34 @@ def main():
     ap.add_argument("--datasets-file", default=str(REPO_ROOT / "datasets.txt"))
     ap.add_argument("--sci-names-file", default=str(REPO_ROOT / "scientific_names.yaml"))
     ap.add_argument("--no-judge", action="store_true",
-                    help="Skip LLM judging of OEQ runs in Experiment C.")
-    ap.add_argument("--judge-model", default="gpt-4o-mini")
-    ap.add_argument("--judge-provider", default="openai", choices=["openai", "hf"])
+                    help="Skip the OEQ judging pass after generation finishes.")
+    ap.add_argument("--judge-only", action="store_true",
+                    help="Skip generation entirely; just judge any pending OEQ "
+                         "runs from a previous --no-judge pass (no vLLM/GPU model "
+                         "load for generation, so it's safe to run standalone).")
+    ap.add_argument("--purge-judge", action="store_true",
+                    help="Delete all existing judge_metrics.json/predictions_with_judge.csv/"
+                         "judge_report.txt under Experiment C before (re)judging, so every "
+                         "OEQ run is scored with one consistent judge model. predictions.csv "
+                         "(generation output) is untouched. Combine with --judge-only to "
+                         "purge-then-rejudge in one step.")
+    ap.add_argument("--judge-model", default="openai/gpt-oss-20b",
+                    help="Judge model. Local HF model id (with --judge-provider hf, "
+                         "default) or an OpenAI model id (with --judge-provider openai, "
+                         "subject to that account's daily rate limit).")
+    ap.add_argument("--judge-provider", default="hf", choices=["openai", "hf"])
     ap.add_argument("--dry-run", action="store_true",
                     help="Print the run matrix and exit (no model load).")
     args = ap.parse_args()
+
+    ablation_dir = REPO_ROOT / "outputs" / "ablation"
+
+    if args.purge_judge:
+        purge_judging(ablation_dir)
+
+    if args.judge_only:
+        run_judging_pass(ablation_dir, args.judge_model, args.judge_provider)
+        return
 
     meta_rows = load_dataset_meta(Path(args.datasets_file))
     meta_by_ds = {r["dataset"]: r for r in meta_rows}
@@ -468,10 +541,9 @@ def main():
             experiment_B(llm, sampling, model, datasets, df_cache)
         if "C" in args.experiments:
             print(f"\n===== [{model}] Experiment C: common vs scientific names =====", flush=True)
-            experiment_C(llm, sampling, model, meta_by_ds, sci_names, datasets,
-                         df_cache, do_judge, args.judge_model, args.judge_provider)
+            experiment_C(llm, sampling, model, meta_by_ds, sci_names, datasets, df_cache)
 
-        # Free the engine before loading the next model.
+        # Free the engine before loading the next model (and before any judging).
         del llm
         try:
             import torch, gc
@@ -480,7 +552,13 @@ def main():
         except Exception:
             pass
 
-    print("\nAll requested ablation runs complete.", flush=True)
+    print("\nAll requested generation runs complete.", flush=True)
+
+    if do_judge and "C" in args.experiments:
+        # Deferred: all vLLM engines are freed by now, so a local judge model
+        # (--judge-provider hf) is safe to load without GPU contention, and it
+        # loads exactly once here instead of once per OEQ run.
+        run_judging_pass(ablation_dir, args.judge_model, args.judge_provider)
 
 
 if __name__ == "__main__":
