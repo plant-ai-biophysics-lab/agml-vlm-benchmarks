@@ -1,0 +1,37 @@
+# Mapping of plant common names (as they appear in datasets.txt) to scientific names.
+# Used by scripts/run_ablation.py Experiment C (common vs scientific name prompt sensitivity).
+#
+# ONLY the plant_type token is substituted in the prompt; class labels stay unchanged.
+# Entries set to null are excluded from Experiment C:
+#   - weeds/crops datasets: their prompts contain no {plant_type} token
+#   - "plant" (plant_village): mixed-crop dataset, no single species applies
+#
+# Best-effort auto-filled — please double check before final paper use.
+
+coffee:     "Coffea arabica"        # arabica_coffee_leaf_disease_classification
+banana:     "Musa"                  # banana_leaf_disease_classification
+bean:       "Phaseolus vulgaris"    # bean_disease_uganda
+betel:      "Piper betle"           # betel_leaf_disease_classification
+blackgram:  "Vigna mungo"           # blackgram_plant_leaf_disease_classification
+chilli:     "Capsicum annuum"       # chilli_leaf_classification
+coconut:    "Cocos nucifera"        # coconut_tree_disease_classification
+corn:       "Zea mays"              # corn_maize_leaf_disease
+cucumber:   "Cucumis sativus"       # cucumber_disease_classification
+guava:      "Psidium guajava"       # guava_disease_pakistan
+java plum:  "Syzygium cumini"       # java_plum_leaf_disease_classification
+onion:      "Allium cepa"           # onion_leaf_classification
+orange:     "Citrus sinensis"       # orange_leaf_disease_classification
+paddy:      "Oryza sativa"          # paddy_disease_classification
+papaya:     "Carica papaya"         # papaya_leaf_disease_classification
+rice:       "Oryza sativa"          # rice_leaf_disease_classification
+soybean:    "Glycine max"           # soybean_insect_classification
+sugarcane:  "Saccharum officinarum" # sugarcane_damage_usa
+sunflower:  "Helianthus annuus"     # sunflower_disease_classification
+tea:        "Camellia sinensis"     # tea_leaf_disease_classification
+tomato:     "Solanum lycopersicum"  # tomato_leaf_disease
+vine:       "Vitis vinifera"        # vine_virus_photo_dataset
+
+# Excluded from Experiment C (no single applicable species / no plant_type in prompt):
+plant:      null                    # plant_village_classification (mixed crops), plant_seedlings_aarhus (weeds)
+crop:       null                    # crop_weeds_greece (weeds task)
+rangeland:  null                    # rangeland_weeds_australia (weeds task)

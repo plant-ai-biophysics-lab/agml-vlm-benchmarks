@@ -22,6 +22,8 @@ def get_mcqa_choices(
     answer_included_ratio: float = 0.7,
     sample_index: int = 0,
     print_sample: bool = False,
+    seed: int = None,
+    randomize_nota_position: bool = False,
 ) -> Tuple[List[str], str, bool, int]:
     """
     Generate MCQA choices for a single sample.
@@ -36,12 +38,18 @@ def get_mcqa_choices(
         answer_included_ratio: Ratio of samples where answer is included (default: 0.7)
         sample_index: Index of current sample (for reproducible seeding)
         print_sample: If True, print debug info for this sample
+        seed: Base random seed. If None, falls back to module-level RANDOM_SEED
+            (env var). Pass an explicit seed for ablation reproducibility.
+        randomize_nota_position: If True, "None of the above" is shuffled among the
+            other options and may appear at any position. If False (default), it is
+            always appended last (original behavior).
 
     Returns:
         Tuple of (choices, correct_answer, answer_was_included, correct_answer_index)
     """
     # Use sample index for reproducible randomization per sample
-    random.seed(RANDOM_SEED + sample_index)
+    base_seed = RANDOM_SEED if seed is None else seed
+    random.seed(base_seed + sample_index)
 
     # Use "None of the above" for both modes since answer is not always present
     special_option = "None of the above"
@@ -128,12 +136,15 @@ def get_mcqa_choices(
         choices_to_shuffle = distractors
         correct_answer = special_option
 
-    # Shuffle the choices (excluding special option)
-    random.shuffle(choices_to_shuffle)
+    if randomize_nota_position:
+        # Include the special option in the shuffle so NOTA can land anywhere.
+        choices = choices_to_shuffle + [special_option]
+        random.shuffle(choices)
+    else:
+        # Original behavior: shuffle distractors/answer, keep NOTA pinned last.
+        random.shuffle(choices_to_shuffle)
+        choices = choices_to_shuffle + [special_option]
 
-    # Add special option at the end
-    choices = choices_to_shuffle + [special_option]
-    
     # Find the index of the correct answer (1-indexed for display)
     correct_answer_index = choices.index(correct_answer)
 
