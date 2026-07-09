@@ -131,17 +131,27 @@ class LLMJudge:
         
         print(f"Loading local model: {self.model_name}")
         print("This may take a few minutes on first load...")
-        
+
+        # device_map="auto" lets accelerate shard the model across GPU and CPU
+        # when it doesn't fully fit in VRAM. For MoE models like gpt-oss this
+        # produces silent cuda/cpu tensor-mismatch errors during the forward
+        # pass instead of a clean OOM. Pin the whole model to a single device
+        # instead -- if it doesn't fit, this fails loudly with a real OOM.
+        device_map = self.device
+        if device_map in ("auto", None):
+            import torch
+            device_map = {"": 0} if torch.cuda.is_available() else "cpu"
+
         # Load model with pipeline
         self.client = pipeline(
             "text-generation",
             model=self.model_name,
             torch_dtype="auto",
-            device_map=self.device,
+            device_map=device_map,
             # attn_implementation="kernels-community/vllm-flash-attn3"
         )
-        
-        print(f"Model loaded successfully on device: {self.device}")
+
+        print(f"Model loaded successfully on device: {device_map}")
     
     def _create_judge_prompt(self, ground_truth: str, predicted: str) -> str:
         """Create prompt for the LLM judge."""
