@@ -250,7 +250,13 @@ def run_oeq(llm, sampling, df, template, *, plant_type):
             "image_path": paths[i],
             "label": true_label,
             "generated_text": gen,
-            "pred_label": matched_label if idx is not None else "",
+            # Deliberately NOT named "pred_label": LLMJudge.evaluate_predictions()
+            # only judges raw generated_text when a "pred_label" column is absent
+            # or mostly empty. Since our fuzzy matcher fills this in for most
+            # rows, naming it "pred_label" made the judge re-confirm the fuzzy
+            # match instead of judging the free-form text -- defeating the
+            # point of judging OEQ output.
+            "fuzzy_pred_label": matched_label if idx is not None else "",
             "match_score": score if idx is not None else 0.0,
             "is_correct": bool(matched_label == true_label),
         })
