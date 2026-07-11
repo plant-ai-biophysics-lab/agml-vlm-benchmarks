@@ -35,16 +35,18 @@ import os
 import sys
 from pathlib import Path
 
-import pandas as pd
-import yaml
-
 # Ensure repo root on path when invoked as `python scripts/run_ablation.py`
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from tasks.classification import load_agml_dataset, agml_to_df
-from utils.mcqa import get_mcqa_choices
-from utils.utils import fuzzy_match_label
+# NOTE: pandas / yaml / tasks.classification / utils.mcqa / utils.utils are
+# deliberately NOT imported at module level. Generation (vLLM) and judging
+# (gpt-oss via transformers) require mutually incompatible transformers
+# versions (vllm needs <4.52, gpt-oss needs >=4.55) and run in separate venvs.
+# --judge-only must be importable with only pandas/pyyaml/torch/transformers/
+# accelerate installed -- it never needs vLLM, agml, sklearn, or PIL. Each
+# function below imports exactly what it needs, so `--judge-only` doesn't
+# drag in the generation-only dependency stack.
 
 # ---------------------------------------------------------------------------
 # Standardized prompts (hardcoded — mirror the paper's Table 1)
@@ -125,6 +127,7 @@ def load_dataset_meta(datasets_file: Path):
 
 
 def load_scientific_names(path: Path):
+    import yaml
     with open(path) as f:
         return yaml.safe_load(f)
 
@@ -178,6 +181,7 @@ def _conversation(image_path, prompt_text):
 # ---------------------------------------------------------------------------
 
 def load_dataset_df(dataset: str):
+    from tasks.classification import load_agml_dataset, agml_to_df
     dataset_path = load_agml_dataset(dataset)
     df = agml_to_df(os.path.join(dataset_path, "val"))
     return df
@@ -186,6 +190,10 @@ def load_dataset_df(dataset: str):
 def run_mcqa(llm, sampling, df, template, *, seed, answer_included_ratio,
              randomize_nota_position, plant_type=None):
     """Run one MCQA condition over a dataframe. Returns a results DataFrame."""
+    import pandas as pd
+    from utils.mcqa import get_mcqa_choices
+    from utils.utils import fuzzy_match_label
+
     class_names = sorted(df["label"].unique().tolist())
     paths = df["image_path"].tolist()
 
@@ -234,6 +242,9 @@ def run_mcqa(llm, sampling, df, template, *, seed, answer_included_ratio,
 
 def run_oeq(llm, sampling, df, template, *, plant_type):
     """Run one OEQ condition over a dataframe. Returns a results DataFrame."""
+    import pandas as pd
+    from utils.utils import fuzzy_match_label
+
     class_names = sorted(df["label"].unique().tolist())
     paths = df["image_path"].tolist()
     prompt = template.replace("{plant_type}", plant_type)
@@ -281,7 +292,7 @@ def is_complete(out_dir: Path, expect_judge: bool = False) -> bool:
     return True
 
 
-def save_run(out_dir: Path, results: pd.DataFrame, meta: dict):
+def save_run(out_dir: Path, results: "pd.DataFrame", meta: dict):
     out_dir.mkdir(parents=True, exist_ok=True)
     results.to_csv(out_dir / "predictions.csv", index=False)
     acc = float(results["is_correct"].mean()) if len(results) else 0.0
