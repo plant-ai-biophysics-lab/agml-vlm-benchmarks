@@ -7,6 +7,13 @@ from vllm import LLM, SamplingParams
 # Qwen2.5-VL config.json has both legacy 'type=mrope' and modern 'rope_type=default',
 # which some vLLM versions reject as a conflict. Patch the validator to reconcile them
 # by promoting the legacy 'type' value into 'rope_type' before the check runs.
+#
+# Scoped specifically to Qwen's "type"=="mrope" case: this patch was previously
+# unconditional (any rope_scaling dict with type != rope_type), which silently
+# rewrote OTHER models' rope_scaling too -- including Gemma 3, whose config
+# legitimately uses different type/rope_type values for its interleaved
+# local/global attention layers. That corruption produced garbage output
+# (near-empty / repeated-token generations) for every gemma_3 run.
 try:
     import vllm.transformers_utils.config as _vllm_cfg
 
@@ -15,9 +22,9 @@ try:
     def _patched_patch_rope_scaling_dict(rope_scaling: dict) -> None:
         if (
             isinstance(rope_scaling, dict)
-            and "type" in rope_scaling
+            and rope_scaling.get("type") == "mrope"
             and "rope_type" in rope_scaling
-            and rope_scaling["type"] != rope_scaling["rope_type"]
+            and rope_scaling["rope_type"] != "mrope"
         ):
             rope_scaling["rope_type"] = rope_scaling["type"]
         _orig_patch(rope_scaling)
