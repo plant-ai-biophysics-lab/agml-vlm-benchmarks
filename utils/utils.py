@@ -39,11 +39,19 @@ def fuzzy_match_label(generated_text: str, candidate_labels: list, threshold: fl
     
     # Remove trailing punctuation
     generated_lower = generated_lower.rstrip('.,;:!?')
-    
+
+    # An empty generated_text has no meaningful content to match. Without this
+    # guard, the containment check below ("" is a substring of every string)
+    # silently returns the FIRST candidate label with score 1.0 for any empty
+    # generation -- i.e. a total generation failure gets recorded as a
+    # confident match instead of "no match found".
+    if not generated_lower:
+        return None, 0.0, None
+
     best_match_idx = None
     best_score = 0.0
     best_label = None
-    
+
     for idx, label in enumerate(candidate_labels):
         label_lower = label.lower().strip()
         
