@@ -132,6 +132,13 @@ def test(
         llm_kwargs["max_model_len"] = args["max_model_len"]
     if args.get("enforce_eager"):
         llm_kwargs["enforce_eager"] = True
+    # Without this, vLLM's "auto" dtype resolution can silently downcast to
+    # float16, which is numerically unstable for some architectures (e.g.
+    # Gemma 3 produces near-total garbage/empty output in fp16). configs.yaml
+    # already specifies "dtype" per model -- forward it so that value is
+    # actually respected instead of silently ignored.
+    if args.get("dtype"):
+        llm_kwargs["dtype"] = args["dtype"]
     llm_kwargs["allowed_local_media_path"] = args.get("allowed_local_media_path", "/")
 
     # Pass pixel constraints through to the vision processor (Qwen VL, etc.)

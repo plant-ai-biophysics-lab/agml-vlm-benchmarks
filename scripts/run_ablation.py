@@ -86,6 +86,12 @@ MODEL_REGISTRY = {
         "hf_id": "google/gemma-3-4b-it",
         "min_pixels": 200704,
         "max_pixels": 200704,
+        # vLLM's "auto" dtype resolution silently downcasts this model to
+        # float16, which is numerically unstable for Gemma 3 (near-total
+        # garbage/empty output). Force bfloat16 explicitly -- confirmed via
+        # scripts/debug_gemma_empty_output.py that this alone fixes it (no
+        # enforce_eager needed; mm_processor_kwargs/vision were red herrings).
+        "dtype": "bfloat16",
     },
 }
 
@@ -158,6 +164,8 @@ def build_llm(model_key: str):
         mm["max_pixels"] = spec["max_pixels"]
     if mm:
         llm_kwargs["mm_processor_kwargs"] = mm
+    if spec.get("dtype") is not None:
+        llm_kwargs["dtype"] = spec["dtype"]
 
     print(f"[load] building vLLM engine for {model_key} ({spec['hf_id']}) ...", flush=True)
     llm = LLM(**llm_kwargs)
